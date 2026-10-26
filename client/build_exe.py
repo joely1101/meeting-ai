@@ -1,5 +1,14 @@
 import os
 import sys
+
+# 強制標準輸出為 UTF-8 避免在美語 Windows CI 環境編碼報錯
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import subprocess
 import datetime
 import shutil
