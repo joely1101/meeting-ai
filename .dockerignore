@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+client/build/
+client/dist/
+data/meetings/*
+data/ToBeDelete/*
+*.log

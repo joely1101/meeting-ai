@@ -1,0 +1,25 @@
+services:
+  meeting-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: joely1101/meeting-ai:latest
+    container_name: meeting-ai-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Asia/Taipei
+      - PORT=8080
+      # 外部存取伺服器的正式網址 (重要：此 URL 會自動注入網頁與 Windows 客戶端下載)
+      - PUBLIC_URL=http://localhost:8080
+      # Google OAuth 2.0 登入憑證 (可選，亦可在 Web 後台設定)
+      - GOOGLE_CLIENT_ID=
+      - GOOGLE_CLIENT_SECRET=
+      # 預設系統管理員信箱 (只要以此 Google 帳號登入即自動升級為 admin)
+      - ADMIN_EMAIL=admin@example.com
+      # 應急本地管理員密碼
+      - ADMIN_PASSWORD=admin888
+    volumes:
+      # 持久化會議資料庫、錄音音檔與逐字稿
+      - ./data:/app/data

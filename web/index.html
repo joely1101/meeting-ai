@@ -1,0 +1,3311 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智匯會議錄音與 AI 雲端轉譯系統</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --primary-dark: #1e40af;
+      --accent: #06b6d4;
+      --accent-glow: rgba(6, 182, 212, 0.25);
+      --bg-dark: #0f172a;
+      --bg-card-dark: #1e293b;
+      --bg-light: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
+      --font: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font);
+      background-color: var(--bg-light);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* 頂部導航列 */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .nav-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1.25rem;
+      box-shadow: 0 4px 10px var(--accent-glow);
+    }
+    .brand-title {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #0f172a, #2563eb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-badge {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      margin-left: 0.4rem;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* 按鈕樣式 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.55rem 1.1rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn-outline {
+      background: #fff;
+      border-color: var(--border);
+      color: var(--text-main);
+    }
+    .btn-outline:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+    }
+    .btn-success:hover {
+      background: #059669;
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover {
+      background: #f1f5f9;
+      color: var(--text-main);
+    }
+
+    /* 主內容容器 */
+    main {
+      flex: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 1.5rem;
+    }
+
+    /* 各區塊顯示/隱藏 */
+    .section-view {
+      display: none;
+    }
+    .section-view.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ====== 1. 首頁 Landing View ====== */
+    .hero-section {
+      background: radial-gradient(circle at 80% 20%, rgba(6, 182, 212, 0.12), transparent 40%),
+                  radial-gradient(circle at 20% 80%, rgba(37, 99, 235, 0.12), transparent 40%),
+                  #ffffff;
+      border-radius: var(--radius-lg);
+      padding: 3.5rem 2.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
+      color: var(--primary);
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+    }
+    .hero-title {
+      font-size: 2.75rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 1.25rem;
+      color: #0f172a;
+      letter-spacing: -0.03em;
+    }
+    .hero-title span {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 2.25rem;
+      line-height: 1.6;
+    }
+    .hero-cta {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .hero-cta .btn {
+      padding: 0.8rem 1.8rem;
+      font-size: 1rem;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .feature-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+      border-color: #cbd5e1;
+    }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      color: #1e293b;
+    }
+    .feature-card p {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .client-download-box {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      color: #fff;
+      border-radius: var(--radius-lg);
+      padding: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-lg);
+    }
+    .client-info h3 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .client-info p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      max-width: 600px;
+    }
+
+    /* ====== 2. 使用者後台 Dashboard ====== */
+    .dashboard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .dashboard-title h2 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .dashboard-title p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+    .stat-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .stat-lbl {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .meetings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1.25rem;
+    }
+    .meeting-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .meeting-card:hover {
+      border-color: #93c5fd;
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+    .meeting-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.6rem;
+    }
+    .meeting-card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 0.85rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .speaker-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1.2rem;
+    }
+    .speaker-tag {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+    }
+    .meeting-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 1rem;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    /* ====== 3. 會議播放與逐字稿 View ====== */
+    .view-meeting-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+    }
+    .back-btn:hover {
+      text-decoration: underline;
+    }
+
+    /* 置頂摘要面板 */
+    .summary-card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: var(--radius-md);
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      border-left: 5px solid var(--primary);
+    }
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .summary-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #0f172a;
+    }
+    .summary-content {
+      font-size: 0.95rem;
+      color: #334155;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+      background: #f8fafc;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    /* 固定式播放器 Sticky Player */
+    .sticky-player-container {
+      position: sticky;
+      top: 65px;
+      z-index: 40;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-md);
+    }
+    .player-controls-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    audio {
+      width: 100%;
+      height: 44px;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    /* 逐字稿清單容器 */
+    .transcript-container {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .transcript-filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-input {
+      padding: 0.5rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      width: 260px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+
+    .dialogue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 600px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+    .dialogue-item {
+      display: flex;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .dialogue-item:hover {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+    }
+    .dialogue-item.active {
+      background: #dbeafe !important;
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .time-badge {
+      font-family: monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: #fff;
+      border: 1px solid #bfdbfe;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      height: fit-content;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .time-badge:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+    .dialogue-body {
+      flex: 1;
+    }
+    .speaker-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 0.25rem;
+    }
+    .dialogue-text {
+      font-size: 0.95rem;
+      color: #1e293b;
+      line-height: 1.5;
+    }
+
+    /* ====== 4. Modal 對話框 ====== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      padding: 1rem;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: var(--radius-md);
+      width: 100%;
+      max-width: 480px;
+      padding: 2rem;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(12px);
+      transition: transform 0.2s ease;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-overlay.open .modal-box {
+      transform: translateY(0);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .close-btn {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+    }
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 0.4rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    .form-help {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    /* 上傳進度條 */
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 1rem 0;
+      display: none;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.3s ease;
+    }
+
+    /* Admin 模態框特別樣式 */
+    .admin-modal-box {
+      max-width: 900px;
+    }
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+    .admin-table th, .admin-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .admin-table th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #475569;
+    }
+
+    /* 頁尾 */
+    footer {
+      border-top: 1px solid var(--border);
+      background: #fff;
+      padding: 1.5rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 3rem;
+    }
+
+    /* 通知 Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .toast {
+      background: #1e293b;
+      color: #fff;
+      padding: 0.8rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: var(--shadow-lg);
+      animation: slideIn 0.3s ease;
+    }
+    .toast.success { border-left: 4px solid var(--success); }
+    .toast.error { border-left: 4px solid var(--danger); }
+    .toast.info { border-left: 4px solid var(--primary); }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部導航列 -->
+  <header>
+    <div class="nav-container">
+      <div class="brand" onclick="navigateHome()">
+        <div class="brand-logo"><i class="fa-solid fa-headset"></i></div>
+        <div>
+          <span class="brand-title">智匯會議 AI</span>
+          <span class="brand-badge">v2.0</span>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <!-- 未登入按鈕群 -->
+                <div id="unauth-nav" style="display: flex; gap: 0.75rem;">
+          <button class="btn btn-primary" onclick="openModal('login-modal')" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-brands fa-google"></i> 登入 / 註冊
+          </button>
+        </div>
+        <!-- 已登入使用者資訊群 -->
+        <div id="auth-nav" style="display: none; align-items: center; gap: 0.75rem;">
+          <button class="btn btn-outline" onclick="navigateDashboard()">
+            <i class="fa-solid fa-table-cells-large"></i> 我的會議
+          </button>
+          <button class="btn btn-outline" onclick="openUserSettingsModal()" title="個人 API Key 與設定">
+            <i class="fa-solid fa-key"></i> 個人設定
+          </button>
+          <button id="admin-btn" class="btn btn-outline" style="display: none;" onclick="openAdminModal()">
+            <i class="fa-solid fa-shield-halved"></i> 系統管理
+          </button>
+          <div style="font-size: 0.85rem; color: #475569; display: flex; align-items: center; gap: 0.4rem;">
+            <i class="fa-solid fa-circle-user" style="font-size: 1.1rem; color: var(--primary);"></i>
+            <span id="user-display-name" style="font-weight: 700;"></span>
+          </div>
+          <button class="btn btn-ghost" onclick="logout()" title="登出">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容容器 -->
+  <main>
+
+    <!-- ====== VIEW 1: 首頁 Landing Page (免登入介紹) ====== -->
+    <section id="view-landing" class="section-view active">
+      <div class="hero-section">
+        <div class="hero-badge">
+          <i class="fa-solid fa-bolt"></i> 全新升級 2.0 架構 · 雲端 Gemini AI 轉譯引擎
+        </div>
+        <h1 class="hero-title">
+          企業級雙向語音錄音<br>
+          搭配 <span>Gemini AI 智慧逐字稿與摘要</span>
+        </h1>
+        <p class="hero-desc">
+          專為實體會議及各類線上會議 (Teams / Zoom / Google Meet / Webex) 打造的次世代會議記錄工具。一鍵錄製系統揚聲器與麥克風無損音訊，雲端自動進行說話者識別、重點會議總結與時間軸秒級回放。
+        </p>
+                <div class="hero-cta">
+          <a href="/api/download/client-installer" class="btn btn-primary" download="會議錄音_安裝檔.exe" style="gap: 0.5rem;">
+            <i class="fa-solid fa-download"></i> 下載 Windows 安裝版 (推薦)
+          </a>
+          <a href="/api/download/client-exe" class="btn btn-outline" download="會議錄音.exe" style="gap: 0.5rem;">
+            <i class="fa-brands fa-windows"></i> 免安裝單檔 (.exe)
+          </a>
+          <button class="btn btn-ghost" onclick="loginWithGoogle()" style="gap: 0.5rem; color: #1e293b; background: rgba(255,255,255,0.8); border: 1px solid #cbd5e1;">
+            <i class="fa-brands fa-google" style="color: #ea4335;"></i> 以 Google 帳號快速登入
+          </button>
+        </div>
+      <!-- 特色功能卡片 -->
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-microphone-lines"></i></div>
+          <h3>雙向極致音質錄音</h3>
+          <p>Windows WASAPI Loopback 獨家音訊架構，無損混音對方語音與自己麥克風，不再有單向錄音或爆音破音問題。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-brain"></i></div>
+          <h3>說話者識別與智慧摘要</h3>
+          <p>由 Google Gemini 3.8 Flash 雲端模型驅動，精準區分「說話者 A/B」，自動歸納會議決策、行動清單與要點整理。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-forward-step"></i></div>
+          <h3>時間軸隨點即播 (HTTP 206)</h3>
+          <p>支援標準 Range Requests 串流協議，點擊逐字稿任意語句時間軸立刻跳轉播放，絕不重跳開頭，雙向同步高亮。</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-building-shield"></i></div>
+          <h3>企業級帳號隔離與權限</h3>
+          <p>採用 Google 帳號登入認證，自動建立專屬雲端會議庫，安全可靠。</p>
+        </div>
+      </div>
+
+      <!-- 客戶端下載區 -->
+      <div class="client-download-box">
+        <div class="client-info">
+          <h3>輕量化 Windows 會議錄音客戶端 (錄音器 v2.0)</h3>
+          <p>純錄音無負擔架構：會議錄音結束後，一鍵直接上傳到本伺服器進行 AI 轉錄與摘要生成，電腦不發燙、不佔 CPU！</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <a href="/api/download/client-installer" class="btn btn-primary" style="padding: 0.85rem 1.6rem; font-size: 1rem;" download="會議錄音_安裝檔.exe">
+            <i class="fa-solid fa-download"></i> 下載安裝版 (推薦)
+          </a>
+          <a href="/api/download/client-exe" class="btn btn-outline" style="padding: 0.85rem 1.4rem; font-size: 1rem;" download="會議錄音.exe">
+            <i class="fa-brands fa-windows"></i> 免安裝單檔 (.exe)
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== VIEW 2: 使用者會議儀表板 Dashboard (登入後) ====== -->
+    <section id="view-dashboard" class="section-view">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>我的會議記錄</h2>
+          <p>查看雲端 AI 處理完成的所有會議、逐字稿與決策摘要</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <a href="/api/download/client-installer" class="btn btn-primary" download="會議錄音_安裝檔.exe" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+            <i class="fa-solid fa-download"></i> 下載安裝版 (.exe)
+          </a>
+          <a href="/api/download/client-exe" class="btn btn-outline" download="會議錄音.exe" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+            <i class="fa-brands fa-windows"></i> 免安裝版 (.exe)
+          </a>
+          <button class="btn btn-outline" onclick="openModal('upload-modal')" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> 上傳音檔轉錄
+          </button>
+        </div>
+      </div>
+
+      <!-- 統計數據 -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #eff6ff; color: var(--primary);">
+            <i class="fa-solid fa-folder-open"></i>
+          </div>
+          <div>
+            <div id="stat-total-meetings" class="stat-val">0</div>
+            <div class="stat-lbl">會議總數</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #f0fdf4; color: var(--success);">
+            <i class="fa-solid fa-clock"></i>
+          </div>
+          <div>
+            <div id="stat-total-duration" class="stat-val">0 分</div>
+            <div class="stat-lbl">總錄音時長</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #fdf2f8; color: #ec4899;">
+            <i class="fa-solid fa-comments"></i>
+          </div>
+          <div>
+            <div id="stat-total-dialogues" class="stat-val">0</div>
+            <div class="stat-lbl">對話語句總計</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 會議清單網格 -->
+      <div id="meetings-list" class="meetings-grid">
+        <!-- 會議卡片由 JS 動態填入 -->
+      </div>
+    </section>
+
+    <!-- ====== VIEW 3: 會議詳情回放與逐字稿 View ====== -->
+    <section id="view-meeting" class="section-view">
+      <div class="view-meeting-header">
+        <button id="btn-back-to-list" class="back-btn" onclick="handleDetailBack()">
+          <i class="fa-solid fa-arrow-left"></i> <span id="btn-back-to-list-text">返回會議列表</span>
+        </button>
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0;">
+          <div id="meeting-detail-title-bar" style="font-size: 1.3rem; font-weight: 800; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+          <button id="btn-edit-meeting-title" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 0.85rem; border-color: var(--primary); color: var(--primary); background: #eff6ff; border-radius: 6px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500;" onclick="openEditTitleModal(currentMeetingData ? currentMeetingData.id : null, event)" title="修改會議標題">
+            <i class="fa-solid fa-pen-to-square"></i> 修改標題
+          </button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button id="btn-detail-share" class="btn btn-primary" onclick="openShareModal(currentMeetingData ? currentMeetingData.id : null)" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" title="分享此會議連結">
+            <i class="fa-solid fa-share-nodes"></i> 分享會議
+          </button>
+          <button class="btn btn-outline" onclick="copySummaryText()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;">
+            <i class="fa-regular fa-copy"></i> 複製摘要
+          </button>
+        </div>
+      </div>
+
+      <!-- 置頂摘要面板 (Top Summary) -->
+      <div class="summary-card">
+        <div class="summary-header">
+          <div class="summary-title">
+            <i class="fa-solid fa-sparkles" style="color: var(--primary);"></i> Gemini AI 會議重點摘要
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button id="btn-edit-summary" class="btn btn-sm btn-outline" onclick="startEditSummary()" title="修改會議重點摘要內容">
+              <i class="fa-solid fa-pen-to-square"></i> 編輯摘要
+            </button>
+            <div id="summary-edit-controls" style="display: none; gap: 0.5rem; align-items: center;">
+              <button id="btn-save-summary" class="btn btn-sm btn-primary" onclick="saveSummaryText()">
+                <i class="fa-solid fa-check"></i> 儲存修改
+              </button>
+              <button class="btn btn-sm btn-outline" onclick="cancelEditSummary()">
+                <i class="fa-solid fa-xmark"></i> 取消
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="meeting-summary-text" class="summary-content">
+          正在載入會議摘要...
+        </div>
+        <textarea id="meeting-summary-edit-area" style="display: none; width: 100%; min-height: 250px; font-family: inherit; font-size: 0.95rem; line-height: 1.7; color: #1e293b; background: #ffffff; border: 1.5px solid var(--primary); border-radius: 8px; padding: 1rem; box-sizing: border-box; resize: vertical; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); margin-top: 0.5rem;" placeholder="在此編輯會議摘要內容 (支援 Markdown 格式)..."></textarea>
+        <div id="summary-edit-hint" style="display: none; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; justify-content: space-between; align-items: center;">
+          <span>💡 提示：可直接修改文字與待辦事項，完成後點擊「儲存修改」，按 <kbd style="background:#e2e8f0;padding:2px 5px;border-radius:4px;font-family:monospace;color:#1e293b;">Ctrl + Enter</kbd> 亦可快速儲存</span>
+          <span id="summary-char-count">0 字</span>
+        </div>
+      </div>
+
+      <!-- 固定播放器 Sticky Player -->
+      <div class="sticky-player-container">
+        <div class="player-controls-row">
+          <audio id="meeting-audio" controls preload="metadata"></audio>
+        </div>
+      </div>
+
+      <!-- 逐字稿同步面板 -->
+      <div class="transcript-container">
+        <div class="transcript-filter-bar">
+          <div style="font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-align-left" style="color: var(--primary);"></i> 逐字稿對話 (點擊時間軸跳轉播放)
+          </div>
+          <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <input type="text" id="transcript-search" class="search-input" placeholder="搜尋關鍵字或說話者..." oninput="filterTranscript()">
+            <span id="transcript-count" style="font-size: 0.85rem; color: var(--text-muted);">共 0 句</span>
+          </div>
+        </div>
+
+        <div id="dialogue-list" class="dialogue-list">
+          <!-- 逐字稿由 JS 動態渲染 -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ====== 模態框 MODALS ====== -->
+
+  <!-- 1. 登入 Modal (Google 快速認證 + 管理員應急入口) -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-arrow-right-to-bracket"></i> 登入系統</h3>
+        <button class="close-btn" onclick="closeModal('login-modal')">&times;</button>
+      </div>
+      <div style="padding: 0.5rem 0 1.25rem 0; text-align: center;">
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
+          點擊下方按鈕即可使用您的 Google / Gmail 帳號一鍵登入，自動建立專屬會議空間。
+        </p>
+
+        <button type="button" onclick="loginWithGoogle()" style="width: 100%; justify-content: center; padding: 12px 16px; font-size: 1rem; font-weight: 600; background: #ffffff; color: #1f2937; border: 1.5px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          使用 Google 帳號登入
+        </button>
+
+        <div style="margin: 1.5rem 0 1rem 0; display: flex; align-items: center; text-align: center; color: #94a3b8; font-size: 0.82rem;">
+          <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
+          <span style="padding: 0 10px; cursor: pointer;" onclick="toggleAdminLoginForm()">
+            <i class="fa-solid fa-lock"></i> 管理員本地密碼登入 (點此展開)
+          </span>
+          <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
+        </div>
+
+        <form id="admin-login-form" onsubmit="handleLogin(event)" style="display: none; text-align: left; margin-top: 1rem;">
+          <div class="form-group">
+            <label class="form-label">管理員帳號 (Email)</label>
+            <input type="text" id="login-email" class="form-input" placeholder="admin@local 或指定信箱">
+          </div>
+          <div class="form-group">
+            <label class="form-label">管理員密碼</label>
+            <input type="password" id="login-password" class="form-input" placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
+            以管理員密碼登入
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 上傳音檔 Modal -->
+  <div id="upload-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">上傳會議錄音轉錄</h3>
+        <button class="close-btn" onclick="closeModal('upload-modal')">&times;</button>
+      </div>
+      <form id="upload-form" onsubmit="handleUpload(event)">
+        <div class="form-group">
+          <label class="form-label">會議自訂標題 (可選)</label>
+          <input type="text" id="upload-title" class="form-input" placeholder="留空則由 AI 自動分析主題">
+        </div>
+        <div class="form-group">
+          <label class="form-label">選擇會議錄音檔案 (MP3 / M4A / WAV)</label>
+          <input type="file" id="upload-file" class="form-input" accept=".mp3,.m4a,.wav,.aac,.flac" required>
+        </div>
+        <div id="upload-progress-container" class="progress-bar-container">
+          <div id="upload-progress-fill" class="progress-bar-fill"></div>
+        </div>
+        <div id="upload-status-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;"></div>
+        <button type="submit" id="upload-submit-btn" class="btn btn-primary" style="width: 100%; justify-content: center;">
+          <i class="fa-solid fa-cloud-arrow-up"></i> 開始上傳並由 AI 轉錄
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Admin 系統管理 Modal (使用者管理 + Key Pool 資源池管理) -->
+  <div id="admin-modal" class="modal-overlay">
+    <div class="modal-box admin-modal-box">
+      <div class="modal-header" style="margin-bottom: 1rem;">
+        <h3 class="modal-title"><i class="fa-solid fa-shield-halved"></i> 系統後台管理 (Admin Panel)</h3>
+        <button class="close-btn" onclick="closeModal('admin-modal')">&times;</button>
+      </div>
+
+      <!-- 分頁標籤 -->
+            <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.25rem; flex-wrap: wrap;">
+        <button id="admin-tab-btn-users" class="btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('users')">
+          <i class="fa-solid fa-users"></i> 使用者帳號管理
+        </button>
+        <button id="admin-tab-btn-keys" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('keys')">
+          <i class="fa-solid fa-key"></i> Key Pool 金鑰資源池
+        </button>
+        <button id="admin-tab-btn-oauth" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('oauth')">
+          <i class="fa-solid fa-sliders"></i> 系統與 OAuth 設定 / 修改密碼
+        </button>
+        <button id="admin-tab-btn-logs" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('logs')">
+          <i class="fa-solid fa-terminal"></i> 伺服器 Log
+        </button>
+      </div>
+
+      <!-- 1: 使用者帳號管理 -->
+      <div id="admin-tab-users-view">
+        <div style="overflow-x: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>姓名</th>
+                <th>信箱</th>
+                <th>角色</th>
+                <th>狀態</th>
+                <th>Email 驗證</th>
+                <th>自訂 Key</th>
+                <th>註冊時間</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-tbody">
+              <!-- 由 JS 動態填入 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 標籤頁 2: API Key 資源池管理 (Key Pool) -->
+      <div id="admin-tab-keys-view" style="display: none;">
+        <!-- 動態平衡說明提示 -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #1e40af; line-height: 1.5;">
+          <i class="fa-solid fa-circle-nodes" style="margin-right: 0.4rem;"></i>
+          <b>動態負載平衡說明 (Least-Used Dynamic Balancing)</b>：<br>
+          當同仁未輸入自訂 Key 時，雲端轉錄引擎會<b>自動選取調度次數最少且啟用中</b>的 Key 進行請求，有效平攤 Gemini API 額度限制並避免單一 Key 併發限速。
+        </div>
+
+        <!-- 新增 API Key 表單 -->
+        <form onsubmit="handleAddSystemKey(event)" style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
+          <div style="flex: 2; min-width: 220px;">
+            <label class="form-label" style="font-size: 0.8rem;">Google Gemini API Key</label>
+            <input type="text" id="new-key-val" class="form-input" placeholder="例如：AIzaSy..." required style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
+          </div>
+          <div style="flex: 1; min-width: 140px;">
+            <label class="form-label" style="font-size: 0.8rem;">備註標籤 (例如：團隊 Key 2)</label>
+            <input type="text" id="new-key-note" class="form-input" placeholder="選填備註說明" style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
+          </div>
+          <div>
+            <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.88rem;">
+              <i class="fa-solid fa-plus"></i> 新增至 Key Pool
+            </button>
+          </div>
+        </form>
+
+        <!-- Key 清單表格 -->
+        <div style="overflow-x: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>API Key (遮罩)</th>
+                <th>備註</th>
+                <th>調度使用次數</th>
+                <th>最近使用時間</th>
+                <th>狀態</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="admin-keys-tbody">
+              <!-- 由 JS 動態填入 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 標籤頁 3: 伺服器即時 Log -->
+      
+      <!-- 分頁 3: 系統與 Google OAuth 設定 + 管理員密碼修改 -->
+      <div id="admin-tab-oauth-view" style="display: none;">
+        <!-- 區塊 1: Google OAuth 設定 -->
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.25rem;">
+          <h4 style="font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-brands fa-google" style="color: #ea4335;"></i> Google OAuth 2.0 登入設定
+          </h4>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.55;">
+            配置 Google OAuth Client ID 與 Secret 後，首頁及客戶端即可啟用「使用 Google 帳號登入」。<br>
+            提示：在 Google Cloud Console 的<b>「已授權的重新導向 URI (Authorized redirect URIs)」</b>請設定為：<br>
+            <code id="admin-redirect-uri-display" style="background: #f1f5f9; padding: 3px 8px; border-radius: 4px; color: #2563eb; font-weight: 600; font-family: monospace; display: inline-block; margin-top: 4px;">http://172.16.1.21:8088/api/auth/google/callback</code>
+          </p>
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">伺服器對外公開網址 (PUBLIC_URL)</label>
+            <input type="text" id="admin-cfg-public-url" class="form-input" placeholder="例如: http://172.16.1.21:8088">
+          </div>
+          <div class="form-group" style="margin-bottom: 0.85rem;">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Google Client ID</label>
+            <input type="text" id="admin-cfg-google-id" class="form-input" placeholder="例如: xxxxxx.apps.googleusercontent.com">
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Google Client Secret</label>
+            <input type="password" id="admin-cfg-google-secret" class="form-input" placeholder="輸入用戶端密鑰">
+          </div>
+          <button class="btn btn-primary" onclick="saveAdminSettings()" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+            <i class="fa-solid fa-floppy-disk"></i> 儲存系統設定
+          </button>
+        </div>
+
+        <!-- 區塊 2: 修改管理員密碼 -->
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+          <h4 style="font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-shield-halved" style="color: #f59e0b;"></i> 修改管理員登入密碼 (Admin Password)
+          </h4>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+            修改目前管理員帳號之本地登入密碼，修改後立即生效。
+          </p>
+          <form onsubmit="handleAdminChangePassword(event)">
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">目前管理員密碼</label>
+              <input type="password" id="admin-curr-pwd" class="form-input" placeholder="預設為 admin888" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">設定新密碼 (至少 4 位)</label>
+              <input type="password" id="admin-new-pwd" class="form-input" placeholder="輸入新密碼" minlength="4" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">確認新密碼</label>
+              <input type="password" id="admin-confirm-pwd" class="form-input" placeholder="再次輸入新密碼" minlength="4" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+              <i class="fa-solid fa-check"></i> 更新管理員密碼
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div id="admin-tab-logs-view" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="font-size: 0.85rem; color: var(--text-muted);">
+            伺服器日誌來源：<code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; color: #0f172a;">/home/joel/www/server.log</code>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <label style="font-size: 0.82rem; color: #475569; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="admin-log-autorefresh" onchange="toggleLogAutoRefresh(this.checked)"> 自動更新 (3秒)
+            </label>
+            <button class="btn btn-sm btn-outline" onclick="loadAdminLogs()">
+              <i class="fa-solid fa-arrows-rotate"></i> 重新整理
+            </button>
+            <button class="btn btn-sm btn-outline" onclick="copyAdminLogs()">
+              <i class="fa-solid fa-copy"></i> 複製 Log
+            </button>
+          </div>
+        </div>
+        <pre id="admin-logs-content" style="background: #090d16; color: #38bdf8; padding: 1.15rem; border-radius: 8px; font-family: Consolas, monospace; font-size: 0.82rem; line-height: 1.5; height: 380px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; border: 1px solid #1e293b; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);">載入中...</pre>
+      
+        <!-- TAB 3: 系統與 OAuth 設定 -->
+        <div id="admin-tab-settings" class="admin-tab-content" style="display: none; padding: 1rem 0;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+            <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #1e293b;"><i class="fa-brands fa-google" style="color: #ea4335;"></i> Google OAuth 2.0 登入設定</h4>
+            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">
+              使用者點擊「使用 Google 帳號登入」時所需之 Client ID 與 Client Secret。亦可於 Docker 啟動時透過環境變數 <code>GOOGLE_CLIENT_ID</code>、<code>GOOGLE_CLIENT_SECRET</code>、<code>PUBLIC_URL</code> 傳入。
+            </p>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">伺服器外部對外網址 (PUBLIC_URL)</label>
+              <input type="text" id="admin-cfg-public-url" class="form-input" placeholder="例如: https://meeting.example.com">
+            </div>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Google Client ID</label>
+              <input type="text" id="admin-cfg-google-id" class="form-input" placeholder="xxxxxx.apps.googleusercontent.com">
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Google Client Secret</label>
+              <input type="password" id="admin-cfg-google-secret" class="form-input" placeholder="••••••••••••••••">
+            </div>
+            <button class="btn btn-primary" onclick="saveAdminSettings()">儲存系統設定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 使用者個人設定 Modal (自訂 API Key + 修改密碼) -->
+  <div id="user-settings-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-user-gear"></i> 個人偏好與帳號設定</h3>
+        <button class="close-btn" onclick="closeModal('user-settings-modal')">&times;</button>
+      </div>
+
+      <!-- 分頁 / 區塊 1: 自訂 Google Gemini API Key -->
+      <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 0.4rem;">
+            <i class="fa-solid fa-key" style="color: var(--primary);"></i> 自訂 Google Gemini API Key
+          </h4>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> 如何免費取得 Google API Key？
+          </a>
+        </div>
+
+        <form onsubmit="handleSaveUserApiKey(event)">
+          <div style="position: relative;">
+            <input type="password" id="user-api-key-input" class="form-input" placeholder="AIzaSy..." style="padding-right: 40px; font-family: monospace;">
+            <button type="button" onclick="toggleKeyVisibility('user-api-key-input', this)" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: none; background: transparent; cursor: pointer; color: var(--text-muted);" title="切換顯示/隱藏">
+              <i class="fa-regular fa-eye"></i>
+            </button>
+          </div>
+          <div id="user-key-status-badge" style="margin-top: 0.5rem; font-size: 0.82rem;"></div>
+
+          <!-- 申請教學引導區塊 -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem 0.85rem; margin-top: 0.75rem; font-size: 0.8rem; color: #475569; line-height: 1.55;">
+            <div style="font-weight: 700; color: #1e293b; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+              <i class="fa-brands fa-google" style="color: #ea4335;"></i> 免費申請步驟說明：
+            </div>
+            1. 造訪 <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--primary); font-weight: 600;">Google AI Studio API Key 頁面 ↗</a><br>
+            2. 登入個人 Google 帳號 (Gmail)<br>
+            3. 點選 <b>「Create API key」</b> 並複製產生的金鑰代碼<br>
+            4. 貼回此處並點擊儲存，未來轉錄將優先使用您的個人專屬額度！
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button type="submit" class="btn btn-primary" style="flex: 1; justify-content: center; font-size: 0.85rem; padding: 0.5rem;">
+              <i class="fa-solid fa-floppy-disk"></i> 儲存自訂 Key
+            </button>
+            <button type="button" class="btn btn-outline" onclick="handleClearUserApiKey()" style="justify-content: center; color: var(--danger); font-size: 0.85rem; padding: 0.5rem;">
+              <i class="fa-solid fa-trash-can"></i> 清除 Key (改用共用池)
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- 區塊 2: 變更登入密碼 -->
+      <!-- 區塊 2: 變更登入密碼 / 認證狀態 -->
+      <div id="user-password-section" style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+          <i class="fa-solid fa-lock" style="color: var(--primary);"></i> 修改登入密碼
+        </h4>
+        <form onsubmit="handleChangeUserPassword(event)">
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label class="form-label" style="font-size: 0.82rem;">目前密碼</label>
+            <input type="password" id="curr-pwd-input" class="form-input" placeholder="請輸入目前的登入密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+          </div>
+          <div class="form-group" style="margin-bottom: 0.75rem;">
+            <label class="form-label" style="font-size: 0.82rem;">新密碼 (至少 4 碼)</label>
+            <input type="password" id="new-pwd-input" class="form-input" minlength="4" placeholder="請輸入新的密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-size: 0.82rem;">確認新密碼</label>
+            <input type="password" id="new-pwd-confirm" class="form-input" minlength="4" placeholder="請再次輸入新密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem; padding: 0.55rem;">
+            <i class="fa-solid fa-check"></i> 確認修改密碼
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 6. 修改會議標題 Modal -->
+  <div id="edit-title-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-pen-to-square"></i> 修改會議標題</h3>
+        <button class="close-btn" onclick="closeModal('edit-title-modal')">&times;</button>
+      </div>
+      <form id="edit-title-form" onsubmit="handleSaveTitle(event)">
+        <input type="hidden" id="edit-title-meeting-id">
+        <div class="form-group" style="margin-top: 0.5rem;">
+          <label class="form-label" style="font-weight: 600; color: #334155;">自訂會議標題 (方便日後識別與搜尋)：</label>
+          <input type="text" id="edit-title-input" class="form-input" placeholder="例如：Foxconn 週會、Ribbon 技術架構同步..." required maxlength="120" style="font-size: 0.98rem; padding: 0.65rem 0.85rem;">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-outline" onclick="closeModal('edit-title-modal')">取消</button>
+          <button type="submit" id="btn-save-title-submit" class="btn btn-primary">
+            <i class="fa-solid fa-check"></i> 儲存標題
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. 分享會議連結 Modal (唯讀分享) -->
+  <div id="share-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-share-nodes" style="color: var(--primary);"></i> 分享會議記錄 (唯讀檢視連結)</h3>
+        <button class="close-btn" onclick="closeModal('share-modal')">&times;</button>
+      </div>
+      <div style="padding: 0.5rem 0;">
+        <p style="font-size: 0.88rem; color: #475569; margin-bottom: 1rem; line-height: 1.5;">
+          任何持有此分享網址的人，皆可直接線上聆聽會議錄音、查看對話逐字稿與 AI 重點摘要，但<b>無法編輯、修改或刪除</b>任何內容。
+        </p>
+
+        <input type="hidden" id="share-modal-meeting-id">
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" style="font-size: 0.82rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-regular fa-clock" style="color: var(--primary);"></i> 分享有效期限 (到期自動失效)：</span>
+            <span id="share-modal-remaining" style="font-size: 0.8rem; font-weight: 500; color: #2563eb;"></span>
+          </label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <select id="share-modal-expire-select" class="form-input" style="font-size: 0.88rem; padding: 0.5rem 0.75rem;" onchange="onShareExpireChange()">
+              <option value="1">1 小時後自動失效</option>
+              <option value="24" selected>24 小時後自動失效 (預設)</option>
+              <option value="72">3 天後自動失效</option>
+              <option value="168">7 天後自動失效</option>
+              <option value="0">永久有效 (不限時間)</option>
+            </select>
+            <button type="button" class="btn btn-outline btn-sm" onclick="onShareExpireChange()" style="white-space: nowrap; padding: 0.5rem 0.75rem;" title="套用並更新有效期限">
+              <i class="fa-solid fa-arrows-rotate"></i> 更新期限
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" style="font-size: 0.82rem; font-weight: 600;">專屬公開分享網址：</label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="share-modal-url" class="form-input" readonly style="background: #f8fafc; font-size: 0.88rem; padding: 0.55rem 0.75rem;" placeholder="正在產生分享連結...">
+            <button type="button" class="btn btn-primary" onclick="copyShareModalUrl()" style="white-space: nowrap; padding: 0.55rem 1rem;">
+              <i class="fa-regular fa-copy"></i> 複製
+            </button>
+          </div>
+        </div>
+
+        <div id="share-modal-status-badge" style="margin-bottom: 1.25rem;"></div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+          <button type="button" id="btn-revoke-share" class="btn btn-outline" onclick="handleRevokeShare()" style="color: var(--danger); border-color: #fecaca; background: #fff5f5; font-size: 0.85rem;">
+            <i class="fa-solid fa-ban"></i> 停止分享 (撤銷連結)
+          </button>
+          <button type="button" class="btn btn-outline" onclick="closeModal('share-modal')" style="font-size: 0.85rem;">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 訊息容器 -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <footer>
+    <p>© 2026 Jumper Technology Co., Ltd. 智躍科技 · 企業會議智能雲端記錄平台</p>
+  </footer>
+
+  <script>
+    // ====== API 路徑自動適配 (/recordv2/api 或 /api) ======
+    const BASE_PATH = window.location.pathname.startsWith('/recordv2') ? '/recordv2' : '';
+    const API_BASE = BASE_PATH;
+
+    let serverConfig = { public_url: '', has_google_auth: false, key_pool_count: 0 };
+
+    function toggleAdminLoginForm() {
+      const f = document.getElementById('admin-login-form');
+      f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+    }
+
+    function loginWithGoogle() {
+      window.location.href = `${BASE_PATH}/api/auth/google/login`;
+    }
+
+    async function fetchServerConfig() {
+      try {
+        const res = await fetch(`${BASE_PATH}/api/config`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          serverConfig = data;
+          checkKeyPoolAlert();
+        }
+      } catch (e) {
+        console.error("fetchServerConfig failed:", e);
+      }
+    }
+
+    function checkKeyPoolAlert() {
+      const dashAlert = document.getElementById('key-pool-empty-alert');
+      if (dashAlert) {
+        if (serverConfig.key_pool_count === 0 && currentUser && currentUser.role === 'admin') {
+          dashAlert.style.display = 'block';
+        } else {
+          dashAlert.style.display = 'none';
+        }
+      }
+    }
+
+    const API = {
+      me: `${BASE_PATH}/api/auth/me`,
+      login: `${BASE_PATH}/api/auth/login`,
+      register: `${BASE_PATH}/api/auth/register`,
+      logout: `${BASE_PATH}/api/auth/logout`,
+      verify: `${BASE_PATH}/api/auth/verify`,
+      meetings: `${BASE_PATH}/api/meetings`,
+      meeting: (id) => `${BASE_PATH}/api/meeting/${id}`,
+      deleteMeeting: `${BASE_PATH}/api/meeting/delete`,
+      updateSummary: `${BASE_PATH}/api/meeting/update_summary`,
+      updateTitle: `${BASE_PATH}/api/meeting/update_title`,
+      upload: `${BASE_PATH}/api/upload`,
+      taskStatus: (id) => `${BASE_PATH}/api/task_status?taskId=${id}`,
+      userApiKey: `${BASE_PATH}/api/user/api_key`,
+      changePassword: `${BASE_PATH}/api/user/change_password`,
+      adminUsers: `${BASE_PATH}/api/admin/users`,
+      adminToggleActive: `${BASE_PATH}/api/admin/users/toggle_active`,
+      adminVerify: `${BASE_PATH}/api/admin/users/verify`,
+      adminDelete: `${BASE_PATH}/api/admin/users/delete`,
+      adminKeys: `${BASE_PATH}/api/admin/keys`,
+      adminAddKey: `${BASE_PATH}/api/admin/keys/add`,
+      adminDeleteKey: `${BASE_PATH}/api/admin/keys/delete`,
+      adminToggleKey: `${BASE_PATH}/api/admin/keys/toggle`
+    };
+
+    // 統一取得帶有 Bearer Token 的 Request Headers
+    function getAuthHeaders(extraHeaders = {}) {
+      const token = localStorage.getItem('recordv2_token') || '';
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...extraHeaders
+      };
+    }
+
+    // 全域狀態
+    let currentUser = null;
+    let allMeetings = [];
+    let activeTasks = [];
+    let currentMeetingData = null;
+    let audioElem = document.getElementById('meeting-audio');
+    let dialoguesData = [];
+
+    // ====== 初始化與認證檢查 ======
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 0. 檢查網址是否有分享 Token (?share=...)
+      const urlParams = new URLSearchParams(window.location.search);
+      const shareTokenFromUrl = urlParams.get('share');
+      if (shareTokenFromUrl) {
+        await fetchServerConfig();
+        await loadSharedMeeting(shareTokenFromUrl);
+        audioElem.addEventListener('timeupdate', onAudioTimeUpdate);
+        return;
+      }
+
+      // 1. 檢查網址是否有 Google OAuth 跳轉返回的 token 或 auth_error
+      const tokenFromUrl = urlParams.get('token');
+      const authError = urlParams.get('auth_error');
+      if (tokenFromUrl) {
+        localStorage.setItem('recordv2_token', tokenFromUrl);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        showToast('Google 帳號登入成功！', 'success');
+      } else if (authError) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        showToast('登入失敗: ' + decodeURIComponent(authError), 'error');
+      }
+
+      // 2. 獲取伺服器公開設定
+      await fetchServerConfig();
+
+      // 3. 檢查登入狀態
+      await checkAuth();
+
+      // 音訊播放進度監聽
+      audioElem.addEventListener('timeupdate', onAudioTimeUpdate);
+    });
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<i class="fa-solid fa-${type === 'success' ? 'circle-check' : (type === 'error' ? 'circle-exclamation' : 'circle-info')}"></i> <span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    // ====== 路由視圖切換 ======
+    function showSection(sectionId) {
+      // 若離開會議詳情視圖 (view-meeting)，立即暫停並停止音訊播放
+      if (sectionId !== 'view-meeting' && audioElem) {
+        try {
+          audioElem.pause();
+          audioElem.currentTime = 0;
+        } catch (e) {}
+      }
+      document.querySelectorAll('.section-view').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(sectionId).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function navigateHome() {
+      if (currentUser) {
+        navigateDashboard();
+      } else {
+        showSection('view-landing');
+      }
+    }
+
+    async function navigateDashboard() {
+      if (!currentUser) {
+        showSection('view-landing');
+        openModal('login-modal');
+        return;
+      }
+      showSection('view-dashboard');
+
+      // 立即重設會議列表為載入中狀態，徹底防範舊使用者資料殘留
+      const container = document.getElementById('meetings-list');
+      if (container) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; padding: 3.5rem 1rem; text-align: center; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-notch fa-spin fa-2x" style="color: var(--primary);"></i>
+            <div style="margin-top: 0.85rem; font-size: 0.95rem; font-weight: 600;">正在讀取您的專屬會議記錄...</div>
+          </div>
+        `;
+      }
+      await loadMeetings();
+    }
+
+    // ====== 帳號認證 API ======
+    async function checkAuth() {
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) {
+        updateNavbar(null);
+        showSection('view-landing');
+        return;
+      }
+
+      try {
+        const res = await fetch(API.me, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentUser = data.user;
+          updateNavbar(currentUser);
+          navigateDashboard();
+        } else {
+          localStorage.removeItem('recordv2_token');
+          updateNavbar(null);
+          showSection('view-landing');
+        }
+      } catch (e) {
+        console.error("Auth check failed:", e);
+        updateNavbar(null);
+        showSection('view-landing');
+      }
+    }
+
+    function updateNavbar(user) {
+      const unauthNav = document.getElementById('unauth-nav');
+      const authNav = document.getElementById('auth-nav');
+      const displayName = document.getElementById('user-display-name');
+      const adminBtn = document.getElementById('admin-btn');
+
+      if (user) {
+        unauthNav.style.display = 'none';
+        authNav.style.display = 'flex';
+        displayName.textContent = `${user.name} (${user.role === 'admin' ? '管理員' : '使用者'})`;
+        adminBtn.style.display = (user.role === 'admin') ? 'inline-flex' : 'none';
+      } else {
+        unauthNav.style.display = 'flex';
+        authNav.style.display = 'none';
+        adminBtn.style.display = 'none';
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const res = await fetch(API.login, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          localStorage.setItem('recordv2_token', data.token);
+          currentUser = data.user;
+          updateNavbar(currentUser);
+          closeModal('login-modal');
+          showToast(`歡迎回來，${currentUser.name}！`, 'success');
+          navigateDashboard();
+        } else {
+          showToast(data.message || '登入失敗，請確認信箱與密碼', 'error');
+        }
+      } catch (err) {
+        showToast('無法連線到伺服器: ' + err.message, 'error');
+      }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+
+      if (!email.toLowerCase().endsWith('@gmail.com')) {
+        showToast('限制僅能使用 @gmail.com 信箱註冊！', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(API.register, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          closeModal('register-modal');
+          showToast('註冊成功！驗證信件已寄送，請至信箱點擊啟用連結。', 'success');
+        } else {
+          showToast(data.message || '註冊失敗', 'error');
+        }
+      } catch (err) {
+        showToast('伺服器錯誤: ' + err.message, 'error');
+      }
+    }
+
+    async function logout() {
+      const token = localStorage.getItem('recordv2_token');
+      if (token) {
+        try {
+          await fetch(API.logout, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } catch (e) {}
+      }
+      localStorage.removeItem('recordv2_token');
+      currentUser = null;
+      allMeetings = [];
+      currentMeetingData = null;
+      dialoguesData = [];
+
+      // 徹底清空會議列表與統計數字，杜絕跨帳號資料殘留
+      const mList = document.getElementById('meetings-list');
+      if (mList) mList.innerHTML = '';
+      const statMeetings = document.getElementById('stat-total-meetings');
+      if (statMeetings) statMeetings.textContent = '0';
+      const statDur = document.getElementById('stat-total-duration');
+      if (statDur) statDur.textContent = '0 分';
+      const statDiag = document.getElementById('stat-total-dialogues');
+      if (statDiag) statDiag.textContent = '0';
+
+      // 停止並重設音訊播放器與逐字稿
+      if (audioElem) {
+        audioElem.pause();
+        audioElem.src = '';
+      }
+      const sumText = document.getElementById('meeting-summary-text');
+      if (sumText) sumText.textContent = '';
+      const diagList = document.getElementById('dialogue-list');
+      if (diagList) diagList.innerHTML = '';
+
+      updateNavbar(null);
+      showSection('view-landing');
+      showToast('您已安全登出', 'info');
+    }
+
+    async function checkVerifyHash() {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#verify=')) {
+        const token = hash.replace('#verify=', '');
+        try {
+          const res = await fetch(`${API.verify}?token=${token}`);
+          const data = await res.json();
+          if (data.status === 'ok') {
+            showToast('🎉 帳號驗證成功！您現在可以立即登入。', 'success');
+            openModal('login-modal');
+          } else {
+            showToast(data.message || '驗證失敗或連結已失效', 'error');
+          }
+        } catch (err) {
+          showToast('驗證請求失敗: ' + err.message, 'error');
+        }
+        window.location.hash = '';
+      }
+    }
+
+    // ====== 會議資料載入與顯示 ======
+    async function loadMeetings() {
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API.meetings}?_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Cache-Control': 'no-cache, no-store'
+          }
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          showToast(errData.message || `讀取會議清單失敗 (${res.status})`, 'error');
+          return;
+        }
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const prevActiveCount = (activeTasks || []).length;
+          allMeetings = data.meetings || [];
+          activeTasks = data.active_tasks || [];
+          renderDashboard();
+
+          // 只有當背景任務完成且實際有新會議產出時，才跳出成功提示
+          const pendingCount = activeTasks.filter(t => t.status !== 'error').length;
+          if (window._prevPendingCount !== undefined && window._prevPendingCount > 0 && pendingCount === 0) {
+            if (allMeetings.length > (window._prevMeetingsCount || 0)) {
+              showToast('🎉 會議 AI 轉錄與摘要生成完成！已更新至會議清單。', 'success');
+            }
+          }
+          window._prevPendingCount = pendingCount;
+          window._prevMeetingsCount = allMeetings.length;
+
+          // 若仍有正在轉錄中的背景任務，每 4 秒自動靜默重新整理進度
+          if (activeTasks.length > 0) {
+            if (!window._taskPollTimer) {
+              window._taskPollTimer = setTimeout(() => {
+                window._taskPollTimer = null;
+                loadMeetings();
+              }, 4000);
+            }
+          } else if (window._taskPollTimer) {
+            clearTimeout(window._taskPollTimer);
+            window._taskPollTimer = null;
+          }
+        } else {
+          showToast(data.message || '讀取會議清單失敗', 'error');
+        }
+      } catch (err) {
+        showToast('讀取會議清單失敗: ' + err.message, 'error');
+      }
+    }
+
+    function renderDashboard() {
+      const container = document.getElementById('meetings-list');
+      container.innerHTML = '';
+
+      // 1. 若有正在進行的背景 AI 轉錄任務，置頂顯示動態進度條
+      if (activeTasks && activeTasks.length > 0) {
+        const tasksBanner = document.createElement('div');
+        tasksBanner.style.cssText = 'grid-column: 1/-1; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem;';
+        
+        activeTasks.forEach(t => {
+          const tCard = document.createElement('div');
+          if (t.status === 'error') {
+            tCard.style.cssText = 'background: #fef2f2; border: 1.5px solid #f87171; border-radius: var(--radius-md); padding: 1.15rem 1.25rem; box-shadow: 0 4px 12px rgba(239,68,68,0.08);';
+            tCard.innerHTML = `
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;">
+                <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #ef4444; color: #fff; border-radius: 50%; flex-shrink: 0;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                  </span>
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.95rem; color: #991b1b;">
+                      <span style="background: #fee2e2; color: #b91c1c; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 6px; font-weight: 800;">AI 轉錄失敗</span>
+                      ${escapeHtml(t.title || '會議錄音')}
+                    </div>
+                    <div style="font-size: 0.82rem; color: #b91c1c; margin-top: 5px; line-height: 1.45;">
+                      ${escapeHtml(t.error || t.message || '雲端轉錄發生未預期的錯誤，請重新上傳或聯繫管理員')}
+                    </div>
+                  </div>
+                </div>
+                <button class="btn btn-outline" style="border-color: #fca5a5; color: #b91c1c; padding: 4px 10px; font-size: 0.8rem;" onclick="dismissTask('${t.taskId}')">
+                  <i class="fa-solid fa-xmark"></i> 關閉提示
+                </button>
+              </div>
+            `;
+          } else {
+            tCard.style.cssText = 'background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border: 1.5px solid #93c5fd; border-radius: var(--radius-md); padding: 1.15rem 1.25rem; box-shadow: 0 4px 12px rgba(37,99,235,0.06);';
+            tCard.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: #2563eb; color: #fff; border-radius: 50%;">
+                    <i class="fa-solid fa-cloud-arrow-up fa-fade"></i>
+                  </span>
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">
+                      <span style="background: #dbeafe; color: #1d4ed8; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 6px; font-weight: 800;">AI 雲端轉錄處理中</span>
+                      ${escapeHtml(t.title || '會議錄音')}
+                    </div>
+                    <div style="font-size: 0.82rem; color: #475569; margin-top: 3px;">
+                      <i class="fa-solid fa-spinner fa-spin" style="color: #2563eb; margin-right: 4px;"></i>${escapeHtml(t.message || '多說話者分離、逐字稿與摘要重點整理中...')}
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size: 0.9rem; font-weight: 800; color: #2563eb;">${t.progress || 35}%</span>
+                </div>
+              </div>
+              <div style="width: 100%; height: 7px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                <div style="width: ${t.progress || 35}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 999px; transition: width 0.4s ease;"></div>
+              </div>
+              <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.4rem; text-align: right;">
+                雲端背景運算中，完成後將自動展示於下方會議記錄
+              </div>
+            `;
+          }
+          tasksBanner.appendChild(tCard);
+        });
+        container.appendChild(tasksBanner);
+      }
+
+      // 2. 判斷會議清單是否為空
+      if (!allMeetings || allMeetings.length === 0) {
+        if (!activeTasks || activeTasks.length === 0) {
+          const emptyCard = document.createElement('div');
+          emptyCard.style.cssText = 'grid-column: 1/-1; background: #fff; border: 1px dashed var(--border); border-radius: var(--radius-md); padding: 3.5rem 1.5rem; text-align: center; color: var(--text-muted);';
+          emptyCard.innerHTML = `
+            <i class="fa-regular fa-folder-open fa-3x" style="color: #cbd5e1; margin-bottom: 1rem;"></i>
+            <h3 style="color: #475569; font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem;">您目前尚無任何會議記錄</h3>
+            <p style="font-size: 0.9rem; max-width: 480px; margin: 0 auto 1.5rem; color: var(--text-muted);">
+              您可以點擊右上角「上傳音檔轉錄」上傳錄音檔案，或使用電腦錄音客戶端錄製並同步。
+            </p>
+            <button class="btn btn-primary" onclick="openModal('upload-modal')">
+              <i class="fa-solid fa-cloud-arrow-up"></i> 立即上傳會議錄音
+            </button>
+          `;
+          container.appendChild(emptyCard);
+        } else {
+          const waitingHint = document.createElement('div');
+          waitingHint.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.9rem;';
+          waitingHint.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--primary); margin-right: 6px;"></i> 正在將您的會議音訊轉換為時間軸逐字稿與決策摘要，完成後將立即顯示於此處...`;
+          container.appendChild(waitingHint);
+        }
+        document.getElementById('stat-total-meetings').textContent = '0';
+        document.getElementById('stat-total-duration').textContent = '0 分';
+        document.getElementById('stat-total-dialogues').textContent = '0';
+        return;
+      }
+
+      let totalSec = 0;
+      let totalDialogues = 0;
+
+      allMeetings.forEach(m => {
+        totalSec += (m.duration_sec || 0);
+        totalDialogues += (m.dialogue_count || 0);
+
+        const card = document.createElement('div');
+        card.className = 'meeting-card';
+
+        const speakerTagsHtml = (m.speakers || []).map(s => {
+          const cleanSpk = s.replace(/[\*\[\]\(\)]/g, '').trim();
+          return `<span class="speaker-tag">${escapeHtml(cleanSpk || s)}</span>`;
+        }).join('');
+
+        card.innerHTML = `
+          <div>
+            <div class="meeting-meta">
+              <span><i class="fa-regular fa-calendar"></i> ${m.date || '未知日期'}</span>
+              <span><i class="fa-regular fa-clock"></i> ${m.duration_str || '00:00'}</span>
+              ${m.owner_name ? `<span><i class="fa-regular fa-user"></i> ${escapeHtml(m.owner_name)}</span>` : ''}
+            </div>
+            <div class="meeting-card-title" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;">
+              <span style="flex: 1; cursor: pointer; line-height: 1.4;" onclick="openMeetingDetail('${m.id}')" title="點擊檢視會議">${escapeHtml(m.title)}</span>
+              <button class="btn btn-outline btn-sm" style="padding: 3px 8px; font-size: 0.8rem; border-color: #cbd5e1; color: var(--primary); background: #f8fafc; border-radius: 6px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500;" onclick="openEditTitleModal('${m.id}', event)" title="修改會議標題">
+                <i class="fa-solid fa-pen-to-square"></i> 修改
+              </button>
+            </div>
+            <div class="speaker-tags">${speakerTagsHtml}</div>
+          </div>
+          <div class="meeting-footer">
+            <button class="btn btn-primary" onclick="openMeetingDetail('${m.id}')">
+              <i class="fa-solid fa-play"></i> 播放與檢視摘要
+            </button>
+            <div style="display: flex; gap: 0.35rem; align-items: center;">
+              <button class="btn btn-outline btn-sm" onclick="openShareModal('${m.id}', event)" title="分享此會議記錄">
+                <i class="fa-solid fa-share-nodes"></i> 分享
+              </button>
+              <button class="btn btn-ghost" style="color: var(--danger);" onclick="deleteMeeting('${m.id}')" title="刪除會議">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      // 填入統計
+      document.getElementById('stat-total-meetings').textContent = allMeetings.length;
+      document.getElementById('stat-total-duration').textContent = `${Math.round(totalSec / 60)} 分鐘`;
+      document.getElementById('stat-total-dialogues').textContent = totalDialogues;
+    }
+
+    // ====== 會議詳情檢視 ======
+    async function openMeetingDetail(meetingId) {
+      cancelEditSummary();
+
+      // 恢復編輯與分享按鈕 (若是分享模式切回時)
+      const btnEditTitle = document.getElementById('btn-edit-meeting-title');
+      if (btnEditTitle) btnEditTitle.style.display = 'inline-flex';
+      const btnEditSummary = document.getElementById('btn-edit-summary');
+      if (btnEditSummary) btnEditSummary.style.display = 'inline-flex';
+      const btnShare = document.getElementById('btn-detail-share');
+      if (btnShare) btnShare.style.display = 'inline-flex';
+      const shareNotice = document.getElementById('shared-mode-notice');
+      if (shareNotice) shareNotice.remove();
+      const backText = document.getElementById('btn-back-to-list-text');
+      if (backText) backText.textContent = '返回會議列表';
+
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.meeting(meetingId), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentMeetingData = data;
+          dialoguesData = data.dialogues || [];
+
+          // 填入標題
+          const mInfo = allMeetings.find(m => m.id === meetingId);
+          document.getElementById('meeting-detail-title-bar').textContent = mInfo ? mInfo.title : meetingId;
+
+          // 填入置頂摘要
+          document.getElementById('meeting-summary-text').textContent = data.summary_text || '尚未產生會議摘要。';
+
+          // 設定音訊播放器
+          audioElem.src = data.audio_url;
+
+          // 渲染逐字稿
+          renderTranscript(dialoguesData);
+
+          showSection('view-meeting');
+        } else {
+          showToast(data.message || '無法開啟會議', 'error');
+        }
+      } catch (err) {
+        showToast('無法載入會議詳細資料: ' + err.message, 'error');
+      }
+    }
+
+    function renderTranscript(dialogues) {
+      const container = document.getElementById('dialogue-list');
+      container.innerHTML = '';
+      document.getElementById('transcript-count').textContent = `共 ${dialogues.length} 句`;
+
+      const speakerColors = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2'];
+      const speakerMap = {};
+      let colorIdx = 0;
+
+      dialogues.forEach((d, idx) => {
+        if (!speakerMap[d.speaker]) {
+          speakerMap[d.speaker] = speakerColors[colorIdx % speakerColors.length];
+          colorIdx++;
+        }
+        const color = speakerMap[d.speaker];
+
+        const item = document.createElement('div');
+        item.className = 'dialogue-item';
+        item.id = `diag-${idx}`;
+        item.dataset.sec = d.sec;
+        item.onclick = () => seekTo(d.sec);
+
+        item.innerHTML = `
+          <button class="time-badge" onclick="event.stopPropagation(); seekTo(${d.sec})">
+            [${d.time}]
+          </button>
+          <div class="dialogue-body">
+            <div class="speaker-name" style="color: ${color};">
+              <i class="fa-solid fa-user-circle"></i> ${escapeHtml(d.speaker)}
+            </div>
+            <div class="dialogue-text">${escapeHtml(d.text)}</div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // 時間軸跳轉播放 (支援 HTTP 206)
+    function seekTo(sec) {
+      if (!audioElem) return;
+      audioElem.currentTime = sec;
+      audioElem.play().catch(e => console.log('Autoplay policy:', e));
+      highlightCurrentDialogue(sec, true);
+    }
+
+    // 播放中同步高亮目前段落
+    function onAudioTimeUpdate() {
+      const curr = audioElem.currentTime;
+      highlightCurrentDialogue(curr, false);
+    }
+
+    function highlightCurrentDialogue(currentSec, forceScroll = false) {
+      if (!dialoguesData || dialoguesData.length === 0) return;
+
+      let activeIdx = -1;
+      for (let i = 0; i < dialoguesData.length; i++) {
+        if (dialoguesData[i].sec <= currentSec) {
+          activeIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      document.querySelectorAll('.dialogue-item').forEach(el => el.classList.remove('active'));
+
+      if (activeIdx >= 0) {
+        const activeElem = document.getElementById(`diag-${activeIdx}`);
+        if (activeElem) {
+          activeElem.classList.add('active');
+          if (forceScroll || !isScrolledIntoView(activeElem)) {
+            activeElem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }
+      }
+    }
+
+    function isScrolledIntoView(el) {
+      const rect = el.getBoundingClientRect();
+      const parentRect = el.parentElement.getBoundingClientRect();
+      return (rect.top >= parentRect.top && rect.bottom <= parentRect.bottom);
+    }
+
+    function filterTranscript() {
+      const q = document.getElementById('transcript-search').value.toLowerCase().trim();
+      if (!q) {
+        renderTranscript(dialoguesData);
+        return;
+      }
+      const filtered = dialoguesData.filter(d => 
+        d.text.toLowerCase().includes(q) || d.speaker.toLowerCase().includes(q)
+      );
+      renderTranscript(filtered);
+    }
+
+    function copySummaryText() {
+      const editArea = document.getElementById('meeting-summary-edit-area');
+      const isEditing = editArea && editArea.style.display !== 'none';
+      const txt = isEditing ? editArea.value : document.getElementById('meeting-summary-text').textContent;
+      navigator.clipboard.writeText(txt).then(() => {
+        showToast('會議摘要已成功複製至剪貼簿！', 'success');
+      });
+    }
+
+        // ====== 會議標題編輯功能 ======
+    function openEditTitleModal(meetingId, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      if (!meetingId) return;
+      const mInfo = allMeetings.find(m => m.id === meetingId);
+      const currentTitle = mInfo ? mInfo.title : (currentMeetingData ? currentMeetingData.title || '' : '');
+      document.getElementById('edit-title-meeting-id').value = meetingId;
+      const titleInput = document.getElementById('edit-title-input');
+      titleInput.value = currentTitle;
+      openModal('edit-title-modal');
+      setTimeout(() => {
+        titleInput.focus();
+        titleInput.select();
+      }, 100);
+    }
+
+    async function handleSaveTitle(e) {
+      e.preventDefault();
+      const meetingId = document.getElementById('edit-title-meeting-id').value;
+      const titleInput = document.getElementById('edit-title-input');
+      const newTitle = titleInput.value.trim();
+      if (!meetingId || !newTitle) return;
+
+      const submitBtn = document.getElementById('btn-save-title-submit');
+      const originalHtml = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> 儲存中...`;
+
+      try {
+        const res = await fetch(API.updateTitle, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ meetingId, newTitle })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          // 更新記憶體中的會議標題
+          const target = allMeetings.find(m => m.id === meetingId);
+          if (target) {
+            target.title = newTitle;
+          }
+          if (currentMeetingData && currentMeetingData.id === meetingId) {
+            currentMeetingData.title = newTitle;
+            const titleBar = document.getElementById('meeting-detail-title-bar');
+            if (titleBar) titleBar.textContent = newTitle;
+          }
+          // 重新渲染卡片
+          renderDashboard();
+          closeModal('edit-title-modal');
+          showToast('🎉 會議標題已成功修改！', 'success');
+        } else {
+          showToast(data.message || '修改標題失敗', 'error');
+        }
+      } catch (err) {
+        showToast('連線錯誤: ' + err.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+      }
+    }
+
+    // ====== 會議摘要線上編輯功能 ======
+    function startEditSummary() {
+      const summaryTextElem = document.getElementById('meeting-summary-text');
+      const editArea = document.getElementById('meeting-summary-edit-area');
+      const hint = document.getElementById('summary-edit-hint');
+      const btnEdit = document.getElementById('btn-edit-summary');
+      const controls = document.getElementById('summary-edit-controls');
+      const charCount = document.getElementById('summary-char-count');
+
+      const currentText = (currentMeetingData && currentMeetingData.summary_text)
+                          ? currentMeetingData.summary_text
+                          : summaryTextElem.textContent.trim();
+      const isPlaceholder = (currentText === '尚未產生會議摘要。' || currentText === '正在載入會議摘要...');
+      editArea.value = isPlaceholder ? '' : currentText;
+
+      summaryTextElem.style.display = 'none';
+      editArea.style.display = 'block';
+      hint.style.display = 'flex';
+      btnEdit.style.display = 'none';
+      controls.style.display = 'flex';
+
+      if (charCount) charCount.textContent = `${editArea.value.length} 字`;
+      editArea.focus();
+
+      if (!editArea._hasInitEvents) {
+        editArea._hasInitEvents = true;
+        editArea.addEventListener('input', () => {
+          if (charCount) charCount.textContent = `${editArea.value.length} 字`;
+        });
+        editArea.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            saveSummaryText();
+          }
+        });
+      }
+    }
+
+    function cancelEditSummary() {
+      const summaryTextElem = document.getElementById('meeting-summary-text');
+      const editArea = document.getElementById('meeting-summary-edit-area');
+      const hint = document.getElementById('summary-edit-hint');
+      const btnEdit = document.getElementById('btn-edit-summary');
+      const controls = document.getElementById('summary-edit-controls');
+
+      if (summaryTextElem) summaryTextElem.style.display = 'block';
+      if (editArea) editArea.style.display = 'none';
+      if (hint) hint.style.display = 'none';
+      if (btnEdit) btnEdit.style.display = 'inline-flex';
+      if (controls) controls.style.display = 'none';
+    }
+
+    async function saveSummaryText() {
+      if (!currentMeetingData || !currentMeetingData.id) return;
+      const editArea = document.getElementById('meeting-summary-edit-area');
+      const btnSave = document.getElementById('btn-save-summary');
+      const newSummary = editArea.value.trim();
+
+      const originalBtnHtml = btnSave.innerHTML;
+      btnSave.disabled = true;
+      btnSave.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> 儲存中...`;
+
+      try {
+        const res = await fetch(API.updateSummary, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            meetingId: currentMeetingData.id,
+            summaryText: newSummary
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentMeetingData.summary_text = newSummary;
+          const summaryTextElem = document.getElementById('meeting-summary-text');
+          summaryTextElem.textContent = newSummary || '尚未填寫會議摘要。';
+          cancelEditSummary();
+          showToast('🎉 會議摘要已成功儲存！', 'success');
+        } else {
+          showToast(data.message || '儲存失敗', 'error');
+        }
+      } catch (err) {
+        showToast('連線錯誤: ' + err.message, 'error');
+      } finally {
+        btnSave.disabled = false;
+        btnSave.innerHTML = originalBtnHtml;
+      }
+    }
+
+    async function deleteMeeting(meetingId) {
+      if (!confirm('確定要刪除這筆會議紀錄嗎？會議檔案將會安全移至 ToBeDelete 備份目錄，不會再被重複掃描。')) return;
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.deleteMeeting, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ meetingId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('會議記錄已刪除並安全備份至 ToBeDelete 目錄', 'success');
+          await loadMeetings();
+        } else {
+          showToast(data.message || '刪除失敗', 'error');
+        }
+      } catch (err) {
+        showToast('刪除出錯: ' + err.message, 'error');
+      }
+    }
+
+    // ====== 音檔上傳與 AI 轉錄 ======
+    async function handleUpload(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('upload-file');
+      const titleInput = document.getElementById('upload-title');
+      const token = localStorage.getItem('recordv2_token');
+
+      if (!fileInput.files.length) {
+        showToast('請先選擇音訊檔案！', 'error');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const title = titleInput.value.trim();
+
+      const progressContainer = document.getElementById('upload-progress-container');
+      const progressFill = document.getElementById('upload-progress-fill');
+      const statusText = document.getElementById('upload-status-text');
+      const submitBtn = document.getElementById('upload-submit-btn');
+
+      progressContainer.style.display = 'block';
+      submitBtn.disabled = true;
+      progressFill.style.width = '20%';
+      statusText.textContent = `檔案上傳中 (${(file.size / 1024 / 1024).toFixed(1)} MB)...`;
+
+      try {
+        const xhr = new XMLHttpRequest();
+        const uploadUrl = `${API.upload}?filename=${encodeURIComponent(file.name)}&title=${encodeURIComponent(title)}`;
+
+        xhr.open('POST', uploadUrl, true);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+        xhr.setRequestHeader('X-Meeting-Title', encodeURIComponent(title));
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.round((evt.loaded / evt.total) * 60);
+            progressFill.style.width = `${percent}%`;
+            statusText.textContent = `上傳中: ${percent}% (檔案大小 ${(evt.total / 1024 / 1024).toFixed(1)} MB)`;
+          }
+        };
+
+        xhr.onload = async () => {
+          if (xhr.status === 200) {
+            const resp = JSON.parse(xhr.responseText);
+            if (resp.status === 'ok') {
+              progressFill.style.width = '100%';
+              statusText.textContent = '上傳成功！已送交雲端背景轉錄。';
+              showToast('會議音檔已成功上傳！雲端正在背景進行 AI 轉錄與摘要。', 'success');
+              setTimeout(() => {
+                closeModal('upload-modal');
+                resetUploadForm();
+                loadMeetings();
+              }, 600);
+            } else {
+              showToast(resp.message || '上傳失敗', 'error');
+              resetUploadForm();
+            }
+          } else {
+            showToast('上傳失敗: HTTP ' + xhr.status, 'error');
+            resetUploadForm();
+          }
+        };
+
+        xhr.onerror = () => {
+          showToast('網路連線失敗，請稍後重試', 'error');
+          resetUploadForm();
+        };
+
+        xhr.send(file);
+      } catch (err) {
+        showToast('上傳錯誤: ' + err.message, 'error');
+        resetUploadForm();
+      }
+    }
+
+        async function dismissTask(taskId) {
+      try {
+        await fetch(`${API_BASE}/api/task/dismiss`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ taskId })
+        });
+      } catch (e) {
+        console.error(e);
+      }
+      loadMeetings();
+    }
+
+    function pollTranscribeTask(taskId) {
+      const progressFill = document.getElementById('upload-progress-fill');
+      const statusText = document.getElementById('upload-status-text');
+
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(API.taskStatus(taskId));
+          const data = await res.json();
+
+          if (data.status === 'done') {
+            clearInterval(interval);
+            progressFill.style.width = '100%';
+            statusText.textContent = '轉錄與摘要生成完成！';
+            showToast('🎉 會議轉錄與 AI 摘要生成完成！', 'success');
+            setTimeout(() => {
+              closeModal('upload-modal');
+              resetUploadForm();
+              loadMeetings();
+            }, 1000);
+          } else if (data.status === 'error') {
+            clearInterval(interval);
+            statusText.textContent = '轉錄錯誤: ' + data.message;
+            showToast('AI 轉錄失敗: ' + data.message, 'error');
+            resetUploadForm();
+          } else {
+            progressFill.style.width = `${Math.min(95, data.progress || 70)}%`;
+            statusText.textContent = data.message || 'AI 轉錄處理中，請耐心稍候...';
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 3000);
+    }
+
+    function resetUploadForm() {
+      const progressContainer = document.getElementById('upload-progress-container');
+      const submitBtn = document.getElementById('upload-submit-btn');
+      progressContainer.style.display = 'none';
+      submitBtn.disabled = false;
+      document.getElementById('upload-form').reset();
+    }
+
+    // ====== ADMIN 管理面板 ======
+    async function openAdminModal() {
+      if (!currentUser || currentUser.role !== 'admin') return;
+      openModal('admin-modal');
+      await loadAdminUsers();
+    }
+
+    async function loadAdminUsers() {
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminUsers, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          renderAdminUsersTable(data.users);
+        }
+      } catch (err) {
+        showToast('載入管理清單失敗: ' + err.message, 'error');
+      }
+    }
+
+    function renderAdminUsersTable(users) {
+      const tbody = document.getElementById('admin-users-tbody');
+      tbody.innerHTML = '';
+
+      users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${u.id}</td>
+          <td><b>${escapeHtml(u.name)}</b></td>
+          <td>${escapeHtml(u.email)}</td>
+          <td><span style="font-weight: 700; color: ${u.role === 'admin' ? 'var(--primary)' : 'inherit'};">${u.role}</span></td>
+          <td>
+            <span style="color: ${u.is_active ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">
+              ${u.is_active ? '啟用' : '停用'}
+            </span>
+          </td>
+          <td>
+            <span style="color: ${u.email_verified ? 'var(--success)' : 'var(--warning)'}; font-weight: 700;">
+              ${u.email_verified ? '已驗證' : '未驗證'}
+            </span>
+          </td>
+          <td>
+            ${u.has_custom_api_key ? `<span style="color: var(--success); font-weight: 700;" title="${u.api_key_masked}"><i class="fa-solid fa-key"></i> 自訂 Key</span>` : `<span style="color: var(--text-muted); font-size: 0.8rem;">系統共用</span>`}
+          </td>
+          <td style="font-size: 0.8rem; color: var(--text-muted);">${u.created_at}</td>
+          <td>
+            <div style="display: flex; gap: 0.4rem;">
+              ${!u.email_verified ? `
+                <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="adminVerifyUser(${u.id})">
+                  手動啟用
+                </button>
+              ` : ''}
+              <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="adminToggleUser(${u.id}, ${!u.is_active})">
+                ${u.is_active ? '停用' : '啟用'}
+              </button>
+              ${u.role !== 'admin' ? `
+                <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="adminDeleteUser(${u.id})">
+                  刪除
+                </button>
+              ` : ''}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function adminVerifyUser(userId) {
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminVerify, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ userId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('使用者已手動驗證啟用', 'success');
+          loadAdminUsers();
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    async function adminToggleUser(userId, active) {
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminToggleActive, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ userId, active })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('帳號狀態已更新', 'success');
+          loadAdminUsers();
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    async function adminDeleteUser(userId) {
+      if (!confirm('確定要永久刪除此帳號嗎？')) return;
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminDelete, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ userId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('使用者已刪除', 'success');
+          loadAdminUsers();
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    // ====== 使用者個人設定 (自訂 API Key 與 密碼管理) ======
+    function openUserSettingsModal() {
+      if (!currentUser) return;
+      const input = document.getElementById('user-api-key-input');
+      const badge = document.getElementById('user-key-status-badge');
+      input.value = '';
+
+      if (currentUser.has_custom_api_key) {
+        badge.innerHTML = `<span style="color: var(--success); font-weight: 700;"><i class="fa-solid fa-circle-check"></i> 目前狀態：已設定個人專屬 Key (${escapeHtml(currentUser.api_key_masked)})</span>`;
+      } else {
+        badge.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-circle-info"></i> 目前狀態：使用系統共用 Key Pool 資源池 (未設定個人 Key)</span>`;
+      }
+
+      // 依認證方式動態顯示密碼修改區塊
+      const pwdSec = document.getElementById('user-password-section');
+      if (pwdSec) {
+        if (currentUser.auth_provider === 'google') {
+          pwdSec.innerHTML = `
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.45rem;">
+              <i class="fa-brands fa-google" style="color: #4285F4; font-size: 1.1rem;"></i> Google 帳戶授權登入
+            </h4>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; color: #475569; line-height: 1.5;">
+              您目前使用 <b>Google 帳戶 (${escapeHtml(currentUser.email)})</b> 登入。<br>
+              登入驗證與密碼安全由 Google 全權託管，<b>在本系統無需另外設定或修改密碼</b>。
+            </div>
+          `;
+        } else {
+          pwdSec.innerHTML = `
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+              <i class="fa-solid fa-lock" style="color: var(--primary);"></i> 修改登入密碼
+            </h4>
+            <form onsubmit="handleChangeUserPassword(event)">
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" style="font-size: 0.82rem;">目前密碼</label>
+                <input type="password" id="curr-pwd-input" class="form-input" placeholder="請輸入目前的登入密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+              </div>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label class="form-label" style="font-size: 0.82rem;">新密碼 (至少 4 碼)</label>
+                <input type="password" id="new-pwd-input" class="form-input" minlength="4" placeholder="請輸入新的密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+              </div>
+              <div class="form-group" style="margin-bottom: 1rem;">
+                <label class="form-label" style="font-size: 0.82rem;">確認新密碼</label>
+                <input type="password" id="new-pwd-confirm" class="form-input" minlength="4" placeholder="請再次輸入新密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
+              </div>
+              <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem; padding: 0.55rem;">
+                <i class="fa-solid fa-check"></i> 確認修改密碼
+              </button>
+            </form>
+          `;
+        }
+      }
+
+      openModal('user-settings-modal');
+    }
+
+    function toggleKeyVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = '<i class="fa-regular fa-eye-slash"></i>';
+      } else {
+        input.type = 'password';
+        btn.innerHTML = '<i class="fa-regular fa-eye"></i>';
+      }
+    }
+
+    async function handleSaveUserApiKey(e) {
+      e.preventDefault();
+      const apiKey = document.getElementById('user-api-key-input').value.trim();
+      const token = localStorage.getItem('recordv2_token');
+
+      try {
+        const res = await fetch(API.userApiKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ api_key: apiKey })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentUser.has_custom_api_key = data.has_custom_api_key;
+          currentUser.api_key_masked = data.api_key_masked;
+          showToast(data.message, 'success');
+          closeModal('user-settings-modal');
+        } else {
+          showToast(data.message || '儲存失敗', 'error');
+        }
+      } catch (err) {
+        showToast('連線錯誤: ' + err.message, 'error');
+      }
+    }
+
+    async function handleClearUserApiKey() {
+      if (!confirm('確定要清除個人自訂 Key 並改用系統共用 Key Pool 嗎？')) return;
+      const token = localStorage.getItem('recordv2_token');
+
+      try {
+        const res = await fetch(API.userApiKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ api_key: '' })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentUser.has_custom_api_key = false;
+          currentUser.api_key_masked = '';
+          showToast(data.message, 'info');
+          closeModal('user-settings-modal');
+        } else {
+          showToast(data.message || '清除失敗', 'error');
+        }
+      } catch (err) {
+        showToast('連線錯誤: ' + err.message, 'error');
+      }
+    }
+
+    // ====== 使用者修改密碼 ======
+    async function handleChangeUserPassword(e) {
+      e.preventDefault();
+      const currPwd = document.getElementById('curr-pwd-input').value;
+      const newPwd = document.getElementById('new-pwd-input').value;
+      const confirmPwd = document.getElementById('new-pwd-confirm').value;
+      const token = localStorage.getItem('recordv2_token');
+
+      if (newPwd !== confirmPwd) {
+        showToast('兩次輸入的新密碼不相符，請重新確認！', 'error');
+        return;
+      }
+      if (newPwd.length < 4) {
+        showToast('新密碼長度需至少 4 碼！', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(API.changePassword, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ current_password: currPwd, new_password: newPwd })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('🎉 ' + data.message, 'success');
+          document.getElementById('curr-pwd-input').value = '';
+          document.getElementById('new-pwd-input').value = '';
+          document.getElementById('new-pwd-confirm').value = '';
+          closeModal('user-settings-modal');
+        } else {
+          showToast(data.message || '密碼變更失敗', 'error');
+        }
+      } catch (err) {
+        showToast('連線錯誤: ' + err.message, 'error');
+      }
+    }
+
+    // ====== ADMIN Key Pool 資源池管理 ======
+    let _adminLogTimer = null;
+
+    function switchAdminTab(tab) {
+      const btnUsers = document.getElementById('admin-tab-btn-users');
+      const btnKeys = document.getElementById('admin-tab-btn-keys');
+      const btnOauth = document.getElementById('admin-tab-btn-oauth');
+      const btnLogs = document.getElementById('admin-tab-btn-logs');
+      const viewUsers = document.getElementById('admin-tab-users-view');
+      const viewKeys = document.getElementById('admin-tab-keys-view');
+      const viewOauth = document.getElementById('admin-tab-oauth-view');
+      const viewLogs = document.getElementById('admin-tab-logs-view');
+
+      // 離開 log tab 時關閉自動重新整理
+      if (tab !== 'logs') {
+        toggleLogAutoRefresh(false);
+        const autoCheck = document.getElementById('admin-log-autorefresh');
+        if (autoCheck) autoCheck.checked = false;
+      }
+
+      [btnUsers, btnKeys, btnOauth, btnLogs].forEach(b => {
+        if (b) {
+          b.style.borderBottomColor = 'transparent';
+          b.style.color = 'var(--text-muted)';
+          b.style.fontWeight = '600';
+        }
+      });
+      [viewUsers, viewKeys, viewOauth, viewLogs].forEach(v => {
+        if (v) v.style.display = 'none';
+      });
+
+      if (tab === 'keys') {
+        btnKeys.style.borderBottomColor = 'var(--primary)';
+        btnKeys.style.color = 'var(--primary)';
+        btnKeys.style.fontWeight = '700';
+        viewKeys.style.display = 'block';
+        loadAdminKeys();
+      } else if (tab === 'oauth') {
+        if (btnOauth) {
+          btnOauth.style.borderBottomColor = 'var(--primary)';
+          btnOauth.style.color = 'var(--primary)';
+          btnOauth.style.fontWeight = '700';
+        }
+        if (viewOauth) {
+          viewOauth.style.display = 'block';
+        }
+        loadAdminSettings();
+      } else if (tab === 'logs') {
+        btnLogs.style.borderBottomColor = 'var(--primary)';
+        btnLogs.style.color = 'var(--primary)';
+        btnLogs.style.fontWeight = '700';
+        viewLogs.style.display = 'block';
+        loadAdminLogs();
+      } else {
+        btnUsers.style.borderBottomColor = 'var(--primary)';
+        btnUsers.style.color = 'var(--primary)';
+        btnUsers.style.fontWeight = '700';
+        viewUsers.style.display = 'block';
+        loadAdminUsers();
+      }
+    }
+
+    async function loadAdminSettings() {
+      try {
+        const res = await fetch(`${BASE_PATH}/api/config`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const pubUrl = data.public_url || window.location.origin;
+          const urlInput = document.getElementById('admin-cfg-public-url');
+          const idInput = document.getElementById('admin-cfg-google-id');
+          const redirDisp = document.getElementById('admin-redirect-uri-display');
+
+          if (urlInput) urlInput.value = pubUrl;
+          if (idInput) idInput.value = data.google_client_id || '';
+          if (redirDisp) redirDisp.textContent = `${pubUrl}/api/auth/google/callback`;
+        }
+      } catch (e) {
+        console.error("loadAdminSettings error:", e);
+      }
+    }
+
+    async function saveAdminSettings() {
+      const pubInput = document.getElementById('admin-cfg-public-url');
+      const idInput = document.getElementById('admin-cfg-google-id');
+      const secInput = document.getElementById('admin-cfg-google-secret');
+
+      const public_url = pubInput ? pubInput.value.trim() : '';
+      const google_client_id = idInput ? idInput.value.trim() : '';
+      const google_client_secret = secInput ? secInput.value.trim() : '';
+
+      try {
+        const res = await fetch(`${BASE_PATH}/api/admin/config`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ public_url, google_client_id, google_client_secret })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('系統與 Google OAuth 設定已成功儲存！', 'success');
+          await fetchServerConfig();
+          loadAdminSettings();
+        } else {
+          showToast(data.message || '儲存失敗', 'error');
+        }
+      } catch (e) {
+        showToast('無法連線到伺服器: ' + e.message, 'error');
+      }
+    }
+
+    async function handleAdminChangePassword(e) {
+      e.preventDefault();
+      const currInput = document.getElementById('admin-curr-pwd');
+      const newInput = document.getElementById('admin-new-pwd');
+      const confInput = document.getElementById('admin-confirm-pwd');
+
+      const current_password = currInput ? currInput.value : '';
+      const new_password = newInput ? newInput.value : '';
+      const confirm_password = confInput ? confInput.value : '';
+
+      if (new_password !== confirm_password) {
+        showToast('兩次輸入的新密碼不一致！', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${BASE_PATH}/api/user/change_password`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ current_password, new_password })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('管理員密碼已成功更新！請牢記您的新密碼。', 'success');
+          if (currInput) currInput.value = '';
+          if (newInput) newInput.value = '';
+          if (confInput) confInput.value = '';
+        } else {
+          showToast(data.message || '密碼修改失敗', 'error');
+        }
+      } catch (e) {
+        showToast('伺服器連線失敗: ' + e.message, 'error');
+      }
+    }
+
+    async function loadAdminLogs() {
+      const logPre = document.getElementById('admin-logs-content');
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/logs`, {
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          logPre.textContent = data.logs || '(目前尚無 Log 輸出)';
+          logPre.scrollTop = logPre.scrollHeight;
+        } else {
+          logPre.textContent = '讀取失敗: ' + (data.message || '無權限');
+        }
+      } catch (err) {
+        logPre.textContent = '連線錯誤: ' + err.message;
+      }
+    }
+
+    function toggleLogAutoRefresh(enabled) {
+      if (_adminLogTimer) {
+        clearInterval(_adminLogTimer);
+        _adminLogTimer = null;
+      }
+      if (enabled) {
+        _adminLogTimer = setInterval(() => {
+          const viewLogs = document.getElementById('admin-tab-logs-view');
+          if (viewLogs && viewLogs.style.display !== 'none') {
+            loadAdminLogs();
+          } else {
+            toggleLogAutoRefresh(false);
+          }
+        }, 3000);
+      }
+    }
+
+    function copyAdminLogs() {
+      const logPre = document.getElementById('admin-logs-content');
+      if (logPre && logPre.textContent) {
+        navigator.clipboard.writeText(logPre.textContent).then(() => {
+          showToast('已複製伺服器 Log 到剪貼簿！', 'success');
+        });
+      }
+    }
+
+    async function loadAdminKeys() {
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminKeys, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          renderAdminKeysTable(data.keys);
+        }
+      } catch (err) {
+        showToast('讀取 Key Pool 失敗: ' + err.message, 'error');
+      }
+    }
+
+    function renderAdminKeysTable(keys) {
+      const tbody = document.getElementById('admin-keys-tbody');
+      tbody.innerHTML = '';
+
+      if (!keys || keys.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Key Pool 目前無金鑰，請於上方表單新增。</td></tr>`;
+        return;
+      }
+
+      keys.forEach(k => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${k.id}</td>
+          <td>
+            <code style="background: #f1f5f9; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace;">${escapeHtml(k.api_key_masked)}</code>
+          </td>
+          <td>${escapeHtml(k.note || '—')}</td>
+          <td>
+            <span style="display: inline-flex; align-items: center; gap: 0.3rem; background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 700; font-size: 0.78rem;">
+              <i class="fa-solid fa-bolt"></i> ${k.usage_count || 0} 次
+            </span>
+          </td>
+          <td style="font-size: 0.8rem; color: var(--text-muted);">${k.last_used_at || '尚未調度'}</td>
+          <td>
+            <span style="color: ${k.is_active ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">
+              ${k.is_active ? '已啟用' : '已停用'}
+            </span>
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.4rem;">
+              <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="adminToggleKey(${k.id}, ${!k.is_active})">
+                ${k.is_active ? '停用' : '啟用'}
+              </button>
+              <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="adminDeleteKey(${k.id})" title="自 Key Pool 移除">
+                刪除
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function handleAddSystemKey(e) {
+      e.preventDefault();
+      const apiKey = document.getElementById('new-key-val').value.trim();
+      const note = document.getElementById('new-key-note').value.trim();
+      const token = localStorage.getItem('recordv2_token');
+
+      try {
+        const res = await fetch(API.adminAddKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ api_key: apiKey, note: note })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message, 'success');
+          document.getElementById('new-key-val').value = '';
+          document.getElementById('new-key-note').value = '';
+          loadAdminKeys();
+        } else {
+          showToast(data.message || '新增失敗', 'error');
+        }
+      } catch (err) {
+        showToast('新增錯誤: ' + err.message, 'error');
+      }
+    }
+
+    async function adminToggleKey(keyId, active) {
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminToggleKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ keyId, active })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Key 狀態已更新', 'success');
+          loadAdminKeys();
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    async function adminDeleteKey(keyId) {
+      if (!confirm('確定要從 Key Pool 移除這把 API Key 嗎？')) return;
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.adminDeleteKey, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ keyId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Key 已移除', 'success');
+          loadAdminKeys();
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  
+    // ====== 會議分享功能 (唯讀檢視 Token 與 自動過期時間) ======
+    let currentShareMeetingId = null;
+
+    function handleDetailBack() {
+      if (currentMeetingData && currentMeetingData.is_shared_view) {
+        window.location.href = window.location.origin + window.location.pathname;
+      } else {
+        navigateDashboard();
+      }
+    }
+
+    function formatRemainingTime(expiresAtStr) {
+      if (!expiresAtStr) return '永久有效';
+      const expDate = new Date(expiresAtStr.replace(' ', 'T'));
+      const now = new Date();
+      const diffMs = expDate - now;
+      if (diffMs <= 0) return '已過期';
+      const diffMins = Math.floor(diffMs / 60000);
+      const hours = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      if (hours >= 24) {
+        const days = Math.floor(hours / 24);
+        const remHours = hours % 24;
+        return `剩餘約 ${days} 天 ${remHours} 小時`;
+      } else if (hours > 0) {
+        return `剩餘 ${hours} 小時 ${mins} 分鐘`;
+      } else {
+        return `剩餘 ${mins} 分鐘`;
+      }
+    }
+
+    async function openShareModal(meetingId, event) {
+      if (event) event.stopPropagation();
+      if (!meetingId) return;
+      currentShareMeetingId = meetingId;
+      document.getElementById('share-modal-meeting-id').value = meetingId;
+      const urlInput = document.getElementById('share-modal-url');
+      const badge = document.getElementById('share-modal-status-badge');
+      const remainingElem = document.getElementById('share-modal-remaining');
+      const btnRevoke = document.getElementById('btn-revoke-share');
+      const expireSelect = document.getElementById('share-modal-expire-select');
+
+      urlInput.value = '正在讀取分享連結...';
+      badge.innerHTML = '';
+      if (remainingElem) remainingElem.textContent = '';
+      btnRevoke.style.display = 'none';
+
+      openModal('share-modal');
+
+      const expireHours = parseInt(expireSelect.value) || 24;
+      await requestShareToken(meetingId, expireHours, false);
+    }
+
+    async function onShareExpireChange() {
+      if (!currentShareMeetingId) return;
+      const expireSelect = document.getElementById('share-modal-expire-select');
+      const expireHours = parseInt(expireSelect.value);
+      const badge = document.getElementById('share-modal-status-badge');
+      badge.innerHTML = `<span style="color: var(--primary); font-size: 0.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> 正在更新有效期限...</span>`;
+      await requestShareToken(currentShareMeetingId, expireHours, true);
+    }
+
+    async function requestShareToken(meetingId, expireHours, isUpdate = false) {
+      const urlInput = document.getElementById('share-modal-url');
+      const badge = document.getElementById('share-modal-status-badge');
+      const remainingElem = document.getElementById('share-modal-remaining');
+      const btnRevoke = document.getElementById('btn-revoke-share');
+
+      try {
+        const token = localStorage.getItem('recordv2_token');
+        const res = await fetch(`${BASE_PATH}/api/meeting/share`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ meetingId: meetingId, action: 'get', expireHours: expireHours })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const shareUrl = data.share_url || `${window.location.origin}${window.location.pathname}?share=${data.share_token}`;
+          urlInput.value = shareUrl;
+          btnRevoke.style.display = 'inline-flex';
+
+          let expireText = '';
+          if (data.expires_at) {
+            const rem = formatRemainingTime(data.expires_at);
+            expireText = `有效期限至：<b>${escapeHtml(data.expires_at)}</b> (${rem})`;
+            if (remainingElem) remainingElem.textContent = `⏳ ${rem}`;
+          } else {
+            expireText = `有效期限：<b>永久有效</b>`;
+            if (remainingElem) remainingElem.textContent = `♾️ 永久有效`;
+          }
+
+          badge.innerHTML = `<span style="display: inline-flex; align-items: center; gap: 0.4rem; color: #15803d; font-size: 0.85rem; font-weight: 500; line-height: 1.4;"><i class="fa-solid fa-circle-check" style="font-size: 1rem;"></i> <span>唯讀分享已啟用 · ${expireText}</span></span>`;
+
+          if (isUpdate) {
+            showToast('已成功更新分享有效期限！', 'success');
+          }
+        } else {
+          urlInput.value = '';
+          badge.innerHTML = `<span style="color: var(--danger); font-size: 0.85rem;"><i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(data.message || '無法產生分享連結')}</span>`;
+        }
+      } catch (err) {
+        urlInput.value = '';
+        badge.innerHTML = `<span style="color: var(--danger); font-size: 0.85rem;"><i class="fa-solid fa-circle-exclamation"></i> 請求失敗: ${escapeHtml(err.message)}</span>`;
+      }
+    }
+
+    async function handleRevokeShare() {
+      if (!currentShareMeetingId) return;
+      if (!confirm('確定要停止分享此會議記錄嗎？\n停止後，先前發出的分享網址將立即失效，其他人將無法再存取。')) {
+        return;
+      }
+      try {
+        const token = localStorage.getItem('recordv2_token');
+        const res = await fetch(`${BASE_PATH}/api/meeting/share`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ meetingId: currentShareMeetingId, action: 'revoke' })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('已停止分享，該連結已失效', 'success');
+          closeModal('share-modal');
+        } else {
+          showToast(data.message || '撤銷失敗', 'error');
+        }
+      } catch (e) {
+        showToast('操作失敗: ' + e.message, 'error');
+      }
+    }
+
+    function copyShareModalUrl() {
+      const urlInput = document.getElementById('share-modal-url');
+      if (!urlInput.value || urlInput.value.startsWith('正在')) {
+        showToast('尚無有效分享連結', 'warning');
+        return;
+      }
+      navigator.clipboard.writeText(urlInput.value).then(() => {
+        showToast('已複製唯讀分享連結到剪貼簿！', 'success');
+      }).catch(() => {
+        urlInput.select();
+        document.execCommand('copy');
+        showToast('已複製唯讀分享連結到剪貼簿！', 'success');
+      });
+    }
+
+    async function loadSharedMeeting(shareToken) {
+      cancelEditSummary();
+      try {
+        const res = await fetch(`${BASE_PATH}/api/share/meeting?token=${encodeURIComponent(shareToken)}`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+          currentMeetingData = data;
+          dialoguesData = data.dialogues || [];
+
+          // 標題
+          document.getElementById('meeting-detail-title-bar').textContent = data.title || data.id;
+
+          // 隱藏編輯標題按鈕、隱藏編輯摘要按鈕、隱藏分享按鈕
+          const btnEditTitle = document.getElementById('btn-edit-meeting-title');
+          if (btnEditTitle) btnEditTitle.style.display = 'none';
+
+          const btnEditSummary = document.getElementById('btn-edit-summary');
+          if (btnEditSummary) btnEditSummary.style.display = 'none';
+
+          const btnShare = document.getElementById('btn-detail-share');
+          if (btnShare) btnShare.style.display = 'none';
+
+          const backText = document.getElementById('btn-back-to-list-text');
+          if (backText) backText.textContent = '系統首頁';
+
+          // 顯示公開唯讀提示橫幅 (含到期時間資訊)
+          let shareNotice = document.getElementById('shared-mode-notice');
+          if (!shareNotice) {
+            shareNotice = document.createElement('div');
+            shareNotice.id = 'shared-mode-notice';
+            shareNotice.style.cssText = 'background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.85rem 1.25rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;';
+            const viewMeeting = document.getElementById('view-meeting');
+            viewMeeting.insertBefore(shareNotice, viewMeeting.children[1]);
+          }
+
+          let expireBadge = '';
+          if (data.share_expires_at) {
+            expireBadge = ` · <span style="display: inline-flex; align-items: center; gap: 0.3rem; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; font-weight: 600;"><i class="fa-regular fa-clock"></i> 有效期至 ${escapeHtml(data.share_expires_at)}</span>`;
+          }
+
+          shareNotice.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 0.6rem; color: #1e40af; font-size: 0.9rem; flex-wrap: wrap;">
+              <i class="fa-solid fa-share-nodes fa-lg"></i>
+              <span>您目前正在檢視由 <b>${escapeHtml(data.owner_name || '會議擁有者')}</b> 分享的會議記錄（<b>訪客唯讀模式</b>${expireBadge}）。</span>
+            </div>
+            <div>
+              <a href="${window.location.origin + window.location.pathname}" class="btn btn-outline btn-sm" style="background: #fff; font-size: 0.82rem; text-decoration: none;">
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> 前往系統登入
+              </a>
+            </div>
+          `;
+
+          // 填入置頂摘要
+          document.getElementById('meeting-summary-text').textContent = data.summary_text || '尚未產生會議摘要。';
+
+          // 設定音訊播放器
+          audioElem.src = data.audio_url;
+
+          // 渲染逐字稿
+          renderTranscript(dialoguesData);
+
+          // 導航欄為訪客顯示
+          const token = localStorage.getItem('recordv2_token');
+          if (token) {
+            await checkAuth();
+          } else {
+            updateNavbar(null);
+          }
+
+          showSection('view-meeting');
+        } else {
+          showSharedErrorScreen(data.message || '此分享連結無效、已過期或已取消');
+        }
+      } catch (err) {
+        showSharedErrorScreen('無法載入分享內容: ' + err.message);
+      }
+    }
+
+    function showSharedErrorScreen(message) {
+      showSection('view-landing');
+      showToast(message, 'error');
+      const hero = document.querySelector('.hero-section');
+      if (hero) {
+        hero.innerHTML = `
+          <div style="background: #ffffff; border: 1px solid #fecaca; border-radius: 12px; padding: 2.5rem 2rem; max-width: 600px; margin: 2rem auto; text-align: center; box-shadow: var(--shadow-md);">
+            <div style="width: 64px; height: 64px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 1.25rem;">
+              <i class="fa-solid fa-link-slash"></i>
+            </div>
+            <h2 style="font-size: 1.35rem; font-weight: 800; color: #1e293b; margin-bottom: 0.75rem;">分享連結無效或已失效</h2>
+            <p style="color: #64748b; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.75rem;">
+              ${escapeHtml(message)}<br>
+              請向分享者索取最新的分享網址，或登入系統檢視您的個人會議記錄。
+            </p>
+            <div style="display: flex; gap: 0.75rem; justify-content: center;">
+              <a href="${window.location.origin + window.location.pathname}" class="btn btn-primary" style="text-decoration: none;">
+                <i class="fa-solid fa-house"></i> 回到系統首頁
+              </a>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+  </script>
+</body>
+</html>
