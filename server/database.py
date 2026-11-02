@@ -955,19 +955,27 @@ def delete_bot_task(task_id, user_id, is_admin=False):
 
 DEFAULT_PROFILES = [
     {
-        "name": "👔 主管會議 / 營運週會",
-        "speakers": "Joel, Iris, Steven, Eric, 董事長",
-        "keywords": "瑞祺, 澔楷, 董事長, 營收, 毛利, 開票, 盤點, 職場霸凌, SMQ, 倉租",
-        "location_context": "台灣總部會議室，部分人員遠端連線",
-        "prompt_hint": "著重在各部門營運進度、決策方針、待追蹤事項與責任歸屬。",
+        "name": "👔 經營管理 / 主管週會",
+        "speakers": "",
+        "keywords": "營收, 毛利, KPI, 季報, 預算, 盤點, 組織架構, 年度目標, 待辦追蹤",
+        "location_context": "公司內部會議室，部分人員遠端連線",
+        "prompt_hint": "著重在各部門營運進度、決策方針、跨部門協調事項與具體指派清單。",
         "is_default": 1
     },
     {
-        "name": "🤝 客戶會議 (Ribbon / Adam)",
-        "speakers": "Adam, Iris, Steven, Joel, Rumus",
-        "keywords": "8300, 8200, 5512, QBR, Cost Gap 15%, Little Fuse, PPV, ICT, A-Team, 瑞祺, 澔楷, Rumus",
-        "location_context": "跨國連線視訊會議 (台灣/美國)，中英雙語混合",
-        "prompt_hint": "著重在客戶需求、QBR 行程安排、商務報價談判與技術架構決策。",
+        "name": "🤝 客戶會議 / 商務洽談",
+        "speakers": "",
+        "keywords": "需求規格, 報價, 交期, 合約條款, 驗收標準, QBR, POC, Action Items, 交付時程",
+        "location_context": "線上視訊會議 (支援中英混雜)，包含客戶與專案團隊",
+        "prompt_hint": "著重在客戶需求細節、商務報價共識、待確認時程與雙方指派的待辦事項 (Action Items)。",
+        "is_default": 0
+    },
+    {
+        "name": "⚙️ 專案研發 / 技術週會",
+        "speakers": "",
+        "keywords": "Sprint, Backlog, Release, API, 架構設計, Code Review, 阻礙 (Blocker), 驗證, CI/CD",
+        "location_context": "研發團隊會議室或線上協作",
+        "prompt_hint": "著重在技術方案評估、開發阻礙排除、系統架構決策與本週交付成果。",
         "is_default": 0
     }
 ]
