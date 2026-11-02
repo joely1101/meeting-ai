@@ -2993,7 +2993,7 @@
       box.style.display = 'block';
 
       if (profileId) {
-        const p = userProfiles.find(x => x.id === profileId);
+        const p = userProfiles.find(x => String(x.id) === String(profileId));
         if (p) {
           title.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 編輯會議分類`;
           idInput.value = p.id;
@@ -3061,7 +3061,7 @@
     }
 
     async function setDefaultProfile(profileId) {
-      const p = userProfiles.find(x => x.id === profileId);
+      const p = userProfiles.find(x => String(x.id) === String(profileId));
       if (!p) return;
       const token = localStorage.getItem('recordv2_token');
       if (!token) return;
@@ -3087,7 +3087,7 @@
     }
 
     async function handleDeleteProfile(profileId) {
-      const p = userProfiles.find(x => x.id === profileId);
+      const p = userProfiles.find(x => String(x.id) === String(profileId));
       if (!p) return;
       if (!confirm(`確定要刪除「${p.name}」分類設定檔嗎？`)) return;
 

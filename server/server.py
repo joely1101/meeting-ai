@@ -103,6 +103,15 @@ def get_base_url(handler):
     proto = handler.headers.get("X-Forwarded-Proto", "http")
     return f"{proto}://{host}"
 
+def read_json_body(handler):
+    try:
+        length = int(handler.headers.get("Content-Length", 0))
+        if length > 0:
+            return json.loads(handler.rfile.read(length).decode("utf-8"))
+    except Exception:
+        pass
+    return {}
+
 def get_auth_user(headers):
     auth_header = headers.get("Authorization") or headers.get("X-Auth-Token")
     if not auth_header:
