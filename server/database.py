@@ -956,16 +956,16 @@ def delete_bot_task(task_id, user_id, is_admin=False):
 DEFAULT_PROFILES = [
     {
         "name": "👔 主管會議 / 營運週會",
-        "speakers": "Joel, Iris, Steven, Eric, 總經理",
-        "keywords": "瑞祺, 澔楷, 營收, 毛利, 開票, 盤點, 職場霸凌, SMQ, 倉租",
+        "speakers": "Joel, Iris, Steven, Eric, 董事長",
+        "keywords": "瑞祺, 澔楷, 董事長, 營收, 毛利, 開票, 盤點, 職場霸凌, SMQ, 倉租",
         "location_context": "台灣總部會議室，部分人員遠端連線",
         "prompt_hint": "著重在各部門營運進度、決策方針、待追蹤事項與責任歸屬。",
         "is_default": 1
     },
     {
         "name": "🤝 客戶會議 (Ribbon / Adam)",
-        "speakers": "Adam, Iris, Steven, Joel, Loomis",
-        "keywords": "8300, 8200, 5512, QBR, Cost Gap 15%, Little Fuse, PPV, ICT, A-Team, 瑞祺, 澔楷",
+        "speakers": "Adam, Iris, Steven, Joel, Rumus",
+        "keywords": "8300, 8200, 5512, QBR, Cost Gap 15%, Little Fuse, PPV, ICT, A-Team, 瑞祺, 澔楷, Rumus",
         "location_context": "跨國連線視訊會議 (台灣/美國)，中英雙語混合",
         "prompt_hint": "著重在客戶需求、QBR 行程安排、商務報價談判與技術架構決策。",
         "is_default": 0
