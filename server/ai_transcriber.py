@@ -513,6 +513,7 @@ def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, 
 **重要：無論會議是英文、中文或中英雙語，【會議摘要】請一律使用清晰的「繁體中文」進行結構化總結。**
 """
 
+    profile_hint = f"\n【會議設定檔與熱詞參考】：\n{profile_prompt_block}\n" if profile_prompt_block else ""
     prompt = f"""這是一段商務會議錄音（語言可能是英文、繁體中文或中英混雜）。
 請將這段音訊轉錄為精確的逐字稿，要求如下：
 1. 請嚴格使用以下標籤包裹逐字稿內容：
@@ -532,6 +533,7 @@ def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, 
    [00:15] [說話者 A]: 大家好，今天會議開始。
    [00:20] [說話者 B]: 收到，請繼續。
 5. 保持語句通順，自動校正語音辨識的同音錯字與常見 IT/商業術語。
+{profile_hint}
 {summary_instruction}
 """
 
