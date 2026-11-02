@@ -676,7 +676,7 @@ def index_existing_meetings(meetings_base_dir):
     """將現有資料夾中的會議自動建檔索引至資料庫"""
     if not os.path.exists(meetings_base_dir):
         return
-    time_pattern = re.compile(r'^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(?:\[([^\]]+)\]|([^：:\n]+)[：:])\s*(.*)$')
+    time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
 
     for user_entry in os.listdir(meetings_base_dir):
         if user_entry.lower() in ('tobedelete', 'to_be_delete', '.git', 'temp', 'tmp'):
@@ -734,20 +734,36 @@ def index_existing_meetings(meetings_base_dir):
             max_sec = 0
             dialogue_count = 0
             for line in transcript_text.splitlines():
-                m = time_pattern.match(line.strip())
+                line = line.strip()
+                if not line:
+                    continue
+                m = time_pattern.match(line)
                 if m:
-                    t_str, s1, s2, txt = m.groups()
-                    spk = (s1 or s2).strip()
-                    speakers.add(spk)
-                    parts = t_str.split(':')
-                    sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2]) if len(parts) == 3 else int(parts[0]) * 60 + int(parts[1])
+                    t_str, s1, s2, s3, txt = m.groups()
+                    spk = (s1 or s2 or s3 or '').strip()
+                    if spk:
+                        speakers.add(spk)
+                    parts = [int(x) for x in t_str.split(':')]
+                    if len(parts) == 3:
+                        sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+                    elif len(parts) == 2:
+                        sec = parts[0] * 60 + parts[1]
+                    else:
+                        sec = parts[0]
                     if sec > max_sec:
                         max_sec = sec
                     dialogue_count += 1
 
-            dur_m = max_sec // 60
+            if not speakers and dialogue_count > 0:
+                speakers.add('說話者')
+
+            dur_h = max_sec // 3600
+            dur_m = (max_sec % 3600) // 60
             dur_s = max_sec % 60
-            dur_str = f"{dur_m:02d}:{dur_s:02d}"
+            if dur_h > 0:
+                dur_str = f"{dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+            else:
+                dur_str = f"{dur_m:02d}:{dur_s:02d}"
 
             title = m_folder_name
             title_file = os.path.join(m_path, "title.txt")

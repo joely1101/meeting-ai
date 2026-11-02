@@ -508,7 +508,7 @@ def handle_api_get(handler):
             elif f.lower().endswith(('.mp3', '.m4a', '.wav', '.aac', '.flac')):
                 audio_file = f
 
-        time_pattern = re.compile(r'^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(?:\[([^\]]+)\]|([^：:\n]+)[：:])\s*(.*)$')
+        time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
         dialogues = []
         speakers = set()
 
@@ -518,15 +518,26 @@ def handle_api_get(handler):
                 continue
             m = time_pattern.match(line)
             if m:
-                t_str, s1, s2, txt = m.groups()
-                spk = (s1 or s2).strip()
-                speakers.add(spk)
-                parts = t_str.split(':')
-                sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2]) if len(parts) == 3 else int(parts[0]) * 60 + int(parts[1])
-                dialogues.append({"sec": sec, "time": t_str, "speaker": spk, "text": txt.strip()})
+                t_str, s1, s2, s3, txt = m.groups()
+                spk = (s1 or s2 or s3 or '').strip()
+                if not spk:
+                    spk = '說話者'
+                else:
+                    speakers.add(spk)
+                parts = [int(x) for x in t_str.split(':')]
+                if len(parts) == 3:
+                    sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+                elif len(parts) == 2:
+                    sec = parts[0] * 60 + parts[1]
+                else:
+                    sec = parts[0]
+                dialogues.append({"sec": sec, "time": t_str, "speaker": spk, "text": (txt or '').strip()})
             else:
                 if dialogues:
                     dialogues[-1]["text"] += " " + line
+
+        if not speakers and dialogues:
+            speakers.add('說話者')
 
         send_json(handler, 200, {
             "status": "ok",
@@ -580,7 +591,7 @@ def handle_api_get(handler):
             elif f.lower().endswith(('.mp3', '.m4a', '.wav', '.aac', '.flac')):
                 audio_file = f
 
-        time_pattern = re.compile(r'^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(?:\[([^\]]+)\]|([^：:\n]+)[：:])\s*(.*)$')
+        time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
         dialogues = []
         speakers = set()
 
@@ -590,15 +601,26 @@ def handle_api_get(handler):
                 continue
             match = time_pattern.match(line)
             if match:
-                t_str, s1, s2, txt = match.groups()
-                spk = (s1 or s2).strip()
-                speakers.add(spk)
-                parts = t_str.split(':')
-                sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2]) if len(parts) == 3 else int(parts[0]) * 60 + int(parts[1])
-                dialogues.append({"sec": sec, "time": t_str, "speaker": spk, "text": txt.strip()})
+                t_str, s1, s2, s3, txt = match.groups()
+                spk = (s1 or s2 or s3 or '').strip()
+                if not spk:
+                    spk = '說話者'
+                else:
+                    speakers.add(spk)
+                parts = [int(x) for x in t_str.split(':')]
+                if len(parts) == 3:
+                    sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+                elif len(parts) == 2:
+                    sec = parts[0] * 60 + parts[1]
+                else:
+                    sec = parts[0]
+                dialogues.append({"sec": sec, "time": t_str, "speaker": spk, "text": (txt or '').strip()})
             else:
                 if dialogues:
                     dialogues[-1]["text"] += " " + line
+
+        if not speakers and dialogues:
+            speakers.add('說話者')
 
         send_json(handler, 200, {
             "status": "ok",

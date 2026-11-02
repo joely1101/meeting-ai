@@ -167,7 +167,11 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
    - 【逐字稿】：必須忠實保留說話者的「原文」（英文發言就記錄英文原文，中文發言就記錄繁體中文，中英夾雜則維持原樣，切勿將逐字稿翻譯）。
    - 【會議摘要】：無論錄音使用何種語言，一律使用「繁體中文」進行重點總結。
 3. 逐字稿必須標註時間軸 [MM:SS] 或 [HH:MM:SS]。
-4. 必須進行人物聲音識別 (Speaker Diarization)，明確區分不同的說話者（例如：「說話者 A」、「說話者 B」，或若對話中有提及姓名可直接標註例如「[Shelly]」、「[Joel]」）。
+4. 必須進行人物聲音識別 (Speaker Diarization)，明確區分不同的說話者（例如：「[說話者 A]」、「[說話者 B]」，或若對話中有提及姓名可直接標註例如「[Shelly]」、「[Joel]」）。
+   每句格式範例：
+   [00:15] [說話者 A]: 大家好，今天會議開始。
+   [00:20] [說話者 B]: 收到，請繼續。
+   若錄音中無法明確區分不同發言人，也請一律統一標註 [說話者]: ...
 5. 保持語句通順，自動校正語音辨識的同音錯字與常見 IT/商業術語。
 {summary_instruction}
 """
@@ -243,29 +247,42 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
             tf.write(transcript_text)
 
         # 解析逐字稿以統計發言人與最大時長
-        time_pattern = re.compile(r'^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(?:\[([^\]]+)\]|([^：:\n]+)[：:])\s*(.*)$')
+        time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
         speakers = set()
         max_sec = 0
         dialogue_count = 0
 
         for line in transcript_text.splitlines():
-            m = time_pattern.match(line.strip())
+            line = line.strip()
+            if not line:
+                continue
+            m = time_pattern.match(line)
             if m:
-                t_str, s1, s2, txt = m.groups()
-                spk = (s1 or s2).strip()
-                speakers.add(spk)
-                parts = t_str.split(':')
+                t_str, s1, s2, s3, txt = m.groups()
+                spk = (s1 or s2 or s3 or '').strip()
+                if spk:
+                    speakers.add(spk)
+                parts = [int(x) for x in t_str.split(':')]
                 if len(parts) == 3:
-                    sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                    sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+                elif len(parts) == 2:
+                    sec = parts[0] * 60 + parts[1]
                 else:
-                    sec = int(parts[0]) * 60 + int(parts[1])
+                    sec = parts[0]
                 if sec > max_sec:
                     max_sec = sec
                 dialogue_count += 1
 
-        dur_m = max_sec // 60
+        if not speakers and dialogue_count > 0:
+            speakers.add('說話者')
+
+        dur_h = max_sec // 3600
+        dur_m = (max_sec % 3600) // 60
         dur_s = max_sec % 60
-        dur_str = f"{dur_m:02d}:{dur_s:02d}"
+        if dur_h > 0:
+            dur_str = f"{dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+        else:
+            dur_str = f"{dur_m:02d}:{dur_s:02d}"
 
         # 決定標題
         final_title = user_title.strip() if user_title else ""
