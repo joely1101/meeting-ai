@@ -10,9 +10,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# 安裝 ffmpeg 支援長會議音訊切片轉錄
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# 安裝基本依賴
+# 安裝 Python 依賴
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -24,7 +27,7 @@ COPY entrypoint.sh .
 
 RUN chmod +x ./entrypoint.sh
 
-# 持久化儲存目錄 (會議音訊、資料庫 record.db、摘要逐字稿)
+# 掛載目錄
 VOLUME ["/app/data"]
 
 EXPOSE 8080
