@@ -3020,20 +3020,331 @@
       }
     }
 
-    // ====== 使用者個人設定 (自訂 API Key) ======
-    function openUserSettingsModal(defaultTab = 'profiles') {
-      switchUserTab(defaultTab);
-      if (!currentUser) return;
-      const input = document.getElementById('user-api-key-input');
-      const badge = document.getElementById('user-key-status-badge');
-      input.value = '';
+    
+    // ==========================================================
+    // 會議分類 Profile (提示詞範本) 管理功能
+    // ==========================================================
+    let userProfiles = [];
 
-      if (currentUser.has_custom_api_key) {
-        badge.innerHTML = `<span style="color: var(--success); font-weight: 700;"><i class="fa-solid fa-circle-check"></i> 目前狀態：已設定個人專屬 Key (${escapeHtml(currentUser.api_key_masked)})</span>`;
+    function switchUserTab(tab) {
+      const pTab = document.getElementById('user-tab-profiles-view');
+      const sTab = document.getElementById('user-tab-security-view');
+      const pBtn = document.getElementById('user-tab-btn-profiles');
+      const sBtn = document.getElementById('user-tab-btn-security');
+      if (!pTab || !sTab) return;
+
+      if (tab === 'profiles') {
+        pTab.style.display = 'block';
+        sTab.style.display = 'none';
+        if (pBtn) {
+          pBtn.style.borderBottom = '3px solid var(--primary)';
+          pBtn.style.color = 'var(--primary)';
+          pBtn.style.fontWeight = '700';
+        }
+        if (sBtn) {
+          sBtn.style.borderBottom = '3px solid transparent';
+          sBtn.style.color = 'var(--text-muted)';
+          sBtn.style.fontWeight = '600';
+        }
+        loadProfiles();
       } else {
-        badge.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-circle-info"></i> 目前狀態：使用系統共用 Key Pool 資源池 (未設定個人 Key)</span>`;
+        pTab.style.display = 'none';
+        sTab.style.display = 'block';
+        if (sBtn) {
+          sBtn.style.borderBottom = '3px solid var(--primary)';
+          sBtn.style.color = 'var(--primary)';
+          sBtn.style.fontWeight = '700';
+        }
+        if (pBtn) {
+          pBtn.style.borderBottom = '3px solid transparent';
+          pBtn.style.color = 'var(--text-muted)';
+          pBtn.style.fontWeight = '600';
+        }
       }
+    }
+
+    async function loadProfiles() {
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+      try {
+        const res = await fetch(API.profiles, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          userProfiles = data.profiles || [];
+          populateProfileDropdowns();
+          renderProfilesList();
+        }
+      } catch (err) {
+        console.error('載入 Profile 失敗:', err);
+      }
+    }
+
+    function populateProfileDropdowns() {
+      const uploadSelect = document.getElementById('upload-profile-select');
+      const botSelect = document.getElementById('bot-profile-select');
+      if (!uploadSelect && !botSelect) return;
+
+      const renderOptions = (selectEl) => {
+        if (!selectEl) return;
+        const prevVal = selectEl.value;
+        selectEl.innerHTML = '';
+
+        userProfiles.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = `${p.is_default ? '★ ' : ''}${p.name}`;
+          if (p.is_default && !prevVal) {
+            opt.selected = true;
+          } else if (prevVal && String(p.id) === String(prevVal)) {
+            opt.selected = true;
+          }
+          selectEl.appendChild(opt);
+        });
+
+        const generalOpt = document.createElement('option');
+        generalOpt.value = '0';
+        generalOpt.textContent = '🌐 通用會議 (無指定詞庫)';
+        selectEl.appendChild(generalOpt);
+
+        const manageOpt = document.createElement('option');
+        manageOpt.value = '__manage__';
+        manageOpt.textContent = '➕ 管理 / 新增會議分類...';
+        selectEl.appendChild(manageOpt);
+      };
+
+      renderOptions(uploadSelect);
+      renderOptions(botSelect);
+
+      if (uploadSelect) {
+        onUploadProfileChanged(uploadSelect.value);
+      }
+    }
+
+    function onUploadProfileChanged(val) {
+      if (val === '__manage__') {
+        closeModal('upload-modal');
+        openUserSettingsModal('profiles');
+        return;
+      }
+      const previewEl = document.getElementById('upload-profile-preview');
+      if (!previewEl) return;
+
+      const p = userProfiles.find(x => String(x.id) === String(val));
+      if (p) {
+        previewEl.style.display = 'block';
+        previewEl.innerHTML = `
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 2px;">
+            ${escapeHtml(p.name)} ${p.is_default ? '<span style="color: var(--primary); font-size: 0.72rem; font-weight: normal;">(預設分類)</span>' : ''}
+          </div>
+          ${p.speakers ? `<div style="color: #475569; margin-top: 2px;">👥 <b>與會者：</b>${escapeHtml(p.speakers)}</div>` : ''}
+          ${p.keywords ? `<div style="color: #475569; margin-top: 2px;">🏷️ <b>熱詞庫：</b>${escapeHtml(p.keywords)}</div>` : ''}
+          ${p.location_context ? `<div style="color: #64748b; margin-top: 2px; font-size: 0.75rem;">📍 ${escapeHtml(p.location_context)}</div>` : ''}
+        `;
+      } else {
+        previewEl.style.display = 'none';
+      }
+    }
+
+    function renderProfilesList() {
+      const listEl = document.getElementById('user-profiles-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+
+      if (userProfiles.length === 0) {
+        listEl.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">尚無自訂分類，請點擊上方「新增會議分類」建立。</div>`;
+        return;
+      }
+
+      userProfiles.forEach(p => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.4rem; position: relative; transition: all 0.2s ease;';
+
+        const defaultBadge = p.is_default
+          ? `<span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 800;"><i class="fa-solid fa-star"></i> 預設套用</span>`
+          : `<button class="btn btn-sm btn-outline" style="padding: 2px 7px; font-size: 0.72rem;" onclick="setDefaultProfile(${p.id})">設為預設</button>`;
+
+        card.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+              ${escapeHtml(p.name)}
+              ${defaultBadge}
+            </div>
+            <div style="display: flex; gap: 0.35rem;">
+              <button class="btn btn-sm btn-outline" onclick="openProfileEditor(${p.id})" title="編輯此分類" style="padding: 3px 8px; font-size: 0.78rem;">
+                <i class="fa-solid fa-pen"></i> 編輯
+              </button>
+              ${userProfiles.length > 1 ? `
+              <button class="btn btn-sm btn-outline" onclick="handleDeleteProfile(${p.id})" title="刪除此分類" style="padding: 3px 8px; font-size: 0.78rem; color: var(--danger); border-color: #fca5a5;">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>` : ''}
+            </div>
+          </div>
+          ${p.speakers ? `<div style="font-size: 0.8rem; color: #334155;">👥 <b>與會人員：</b>${escapeHtml(p.speakers)}</div>` : ''}
+          ${p.keywords ? `<div style="font-size: 0.8rem; color: #334155;">🏷️ <b>熱詞庫：</b>${escapeHtml(p.keywords)}</div>` : ''}
+          ${p.location_context ? `<div style="font-size: 0.78rem; color: #64748b;">📍 <b>環境/地點：</b>${escapeHtml(p.location_context)}</div>` : ''}
+          ${p.prompt_hint ? `<div style="font-size: 0.78rem; color: #64748b;">📝 <b>摘要指示：</b>${escapeHtml(p.prompt_hint)}</div>` : ''}
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    function openProfileEditor(profileId = null) {
+      const box = document.getElementById('profile-edit-box');
+      const title = document.getElementById('profile-editor-title');
+      const idInput = document.getElementById('edit-profile-id');
+      const nameInput = document.getElementById('edit-profile-name');
+      const spkInput = document.getElementById('edit-profile-speakers');
+      const kwInput = document.getElementById('edit-profile-keywords');
+      const locInput = document.getElementById('edit-profile-location');
+      const hintInput = document.getElementById('edit-profile-hint');
+      const defInput = document.getElementById('edit-profile-default');
+
+      box.style.display = 'block';
+
+      if (profileId) {
+        const p = userProfiles.find(x => x.id === profileId);
+        if (p) {
+          title.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> 編輯會議分類`;
+          idInput.value = p.id;
+          nameInput.value = p.name || '';
+          spkInput.value = p.speakers || '';
+          kwInput.value = p.keywords || '';
+          locInput.value = p.location_context || '';
+          hintInput.value = p.prompt_hint || '';
+          defInput.checked = !!p.is_default;
+        }
+      } else {
+        title.innerHTML = `<i class="fa-solid fa-plus"></i> 新增會議分類`;
+        idInput.value = '';
+        nameInput.value = '';
+        spkInput.value = '';
+        kwInput.value = '';
+        locInput.value = '';
+        hintInput.value = '';
+        defInput.checked = (userProfiles.length === 0);
+      }
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function cancelProfileEditor() {
+      const box = document.getElementById('profile-edit-box');
+      if (box) box.style.display = 'none';
+    }
+
+    async function handleSaveProfile(e) {
+      e.preventDefault();
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+
+      const idVal = document.getElementById('edit-profile-id').value;
+      const payload = {
+        id: idVal ? parseInt(idVal, 10) : null,
+        name: document.getElementById('edit-profile-name').value.trim(),
+        speakers: document.getElementById('edit-profile-speakers').value.trim(),
+        keywords: document.getElementById('edit-profile-keywords').value.trim(),
+        location_context: document.getElementById('edit-profile-location').value.trim(),
+        prompt_hint: document.getElementById('edit-profile-hint').value.trim(),
+        is_default: document.getElementById('edit-profile-default').checked
+      };
+
+      try {
+        const res = await fetch(API.saveProfile, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message || '會議分類已儲存！', 'success');
+          cancelProfileEditor();
+          await loadProfiles();
+        } else {
+          showToast(data.message || '儲存失敗', 'error');
+        }
+      } catch (err) {
+        showToast('網路或伺服器錯誤: ' + err.message, 'error');
+      }
+    }
+
+    async function setDefaultProfile(profileId) {
+      const p = userProfiles.find(x => x.id === profileId);
+      if (!p) return;
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+
+      const payload = { ...p, is_default: true };
+      try {
+        const res = await fetch(API.saveProfile, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(`已將「${p.name}」設為預設分類`, 'success');
+          await loadProfiles();
+        }
+      } catch (err) {
+        showToast('操作失敗: ' + err.message, 'error');
+      }
+    }
+
+    async function handleDeleteProfile(profileId) {
+      const p = userProfiles.find(x => x.id === profileId);
+      if (!p) return;
+      if (!confirm(`確定要刪除「${p.name}」分類設定檔嗎？`)) return;
+
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+
+      try {
+        const res = await fetch(API.deleteProfile, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: profileId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('會議分類已刪除', 'success');
+          cancelProfileEditor();
+          await loadProfiles();
+        } else {
+          showToast(data.message || '刪除失敗', 'error');
+        }
+      } catch (err) {
+        showToast('刪除失敗: ' + err.message, 'error');
+      }
+    }
+
+
+// ====== 使用者個人設定 (自訂 API Key) ======
+    // ====== 使用者個人設定 (自訂 API Key 與會議分類 Profile) ======
+    function openUserSettingsModal(defaultTab = 'profiles') {
       openModal('user-settings-modal');
+      switchUserTab(defaultTab);
+      if (currentUser) {
+        const input = document.getElementById('user-api-key-input');
+        const badge = document.getElementById('user-key-status-badge');
+        if (input) input.value = '';
+        if (badge) {
+          if (currentUser.has_custom_api_key) {
+            badge.innerHTML = `<span style="color: var(--success); font-weight: 700;"><i class="fa-solid fa-circle-check"></i> 目前狀態：已設定個人專用 Key (${escapeHtml(currentUser.api_key_masked)})</span>`;
+          } else {
+            badge.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-circle-info"></i> 目前狀態：使用系統共享 Key Pool 資源池 (未設定個人 Key)</span>`;
+          }
+        }
+      }
     }
 
     function toggleKeyVisibility(inputId, btn) {
