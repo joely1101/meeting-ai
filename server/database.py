@@ -610,6 +610,21 @@ def update_meeting_title(meeting_id, new_title, user_id, is_admin=False):
     conn.close()
     return affected > 0
 
+def update_meeting_speakers(meeting_id, new_speakers_list, user_id=None, is_admin=False):
+    """更新會議中的發言人名單 (speakers_json)"""
+    conn = get_db()
+    cursor = conn.cursor()
+    speakers_json = json.dumps(new_speakers_list, ensure_ascii=False)
+    if is_admin or user_id is None:
+        cursor.execute("UPDATE meetings SET speakers_json = ? WHERE id = ?", (speakers_json, meeting_id))
+    else:
+        cursor.execute("UPDATE meetings SET speakers_json = ? WHERE id = ? AND user_id = ?", (speakers_json, meeting_id, user_id))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
 def get_or_create_share_token(meeting_id, user_id, is_admin=False, expire_hours=24):
     """取得或產生會議的唯讀分享 Token，並設定有效到期時間"""
     conn = get_db()

@@ -1037,6 +1037,12 @@
           <button class="btn btn-outline" onclick="copySummaryText()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;">
             <i class="fa-regular fa-copy"></i> 複製摘要
           </button>
+          <button class="btn btn-outline" onclick="downloadTranscript()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="下載整場會議逐字稿文字檔 (.txt)">
+            <i class="fa-solid fa-file-arrow-down"></i> 下載逐字稿
+          </button>
+          <button id="btn-remap-speakers" class="btn btn-outline" onclick="openRemapSpeakersModal()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="校正發言人姓名並同步更新摘要">
+            <i class="fa-solid fa-users-gear"></i> 校正發言人
+          </button>
         </div>
       </div>
 
@@ -1686,6 +1692,8 @@
       deleteMeeting: `${BASE_PATH}/api/meeting/delete`,
       updateSummary: `${BASE_PATH}/api/meeting/update_summary`,
       updateTitle: `${BASE_PATH}/api/meeting/update_title`,
+      remapSpeakers: `${BASE_PATH}/api/meeting/remap_speakers`,
+
       upload: `${BASE_PATH}/api/upload`,
       taskStatus: (id) => `${BASE_PATH}/api/task_status?taskId=${id}`,
       userApiKey: `${BASE_PATH}/api/user/api_key`,
@@ -2201,6 +2209,7 @@
       if (btnEditSummary) btnEditSummary.style.display = 'inline-flex';
       const btnShare = document.getElementById('btn-detail-share');
       if (btnShare) btnShare.style.display = 'inline-flex';
+      const btnRemap = document.getElementById('btn-remap-speakers'); if (btnRemap) btnRemap.style.display = 'inline-flex';
       const shareNotice = document.getElementById('shared-mode-notice');
       if (shareNotice) shareNotice.remove();
       const backText = document.getElementById('btn-back-to-list-text');
@@ -2265,7 +2274,7 @@
             [${d.time}]
           </button>
           <div class="dialogue-body">
-            <div class="speaker-name" style="color: ${color};">
+            <div class="speaker-name" style="color: ${color}; cursor: pointer; user-select: none;" onclick="event.stopPropagation(); quickRemapSentence(${idx}, '${escapeHtml(d.speaker)}')" title="點擊修改此發言人">
               <i class="fa-solid fa-user-circle"></i> ${escapeHtml(d.speaker)}
             </div>
             <div class="dialogue-text">${escapeHtml(d.text)}</div>
@@ -3723,6 +3732,7 @@
 
           const btnShare = document.getElementById('btn-detail-share');
           if (btnShare) btnShare.style.display = 'none';
+      const btnRemap = document.getElementById('btn-remap-speakers'); if (btnRemap) btnRemap.style.display = 'none';
 
           const backText = document.getElementById('btn-back-to-list-text');
           if (backText) backText.textContent = '系統首頁';
@@ -3805,6 +3815,341 @@
       }
     }
 
+  
+    // ====== 發言人校正與摘要同步 (Speaker Remap & Summary Sync) ======
+    let activeRemapTargetInputId = null;
+
+    function getCandidateSpeakerNames() {
+      const candidates = new Set();
+      if (window.userProfiles && Array.isArray(userProfiles)) {
+        userProfiles.forEach(p => {
+          if (p.speakers) {
+            p.speakers.split(/[,/、，\s]+/).forEach(s => {
+              const name = s.trim();
+              if (name) candidates.add(name);
+            });
+          }
+        });
+      }
+      if (currentMeetingData && currentMeetingData.speakers) {
+        currentMeetingData.speakers.forEach(s => {
+          const name = (s || '').trim();
+          if (name && name !== '說話者') candidates.add(name);
+        });
+      }
+      return Array.from(candidates);
+    }
+
+    function openRemapSpeakersModal() {
+      if (!currentMeetingData) {
+        showToast('請先開啟會議', 'warning');
+        return;
+      }
+      const speakers = (currentMeetingData.speakers && currentMeetingData.speakers.length > 0)
+        ? currentMeetingData.speakers
+        : Array.from(new Set((dialoguesData || []).map(d => d.speaker))).filter(Boolean);
+
+      if (speakers.length === 0) {
+        showToast('本場會議未檢測到任何發言人標籤', 'info');
+        return;
+      }
+
+      const container = document.getElementById('remap-speakers-list');
+      container.innerHTML = '';
+
+      const candidates = getCandidateSpeakerNames();
+      const chipsBox = document.getElementById('remap-candidate-chips');
+      const chipsList = document.getElementById('remap-candidate-chips-list');
+      if (candidates.length > 0) {
+        chipsBox.style.display = 'block';
+        chipsList.innerHTML = candidates.map(name => `
+          <button type="button" class="btn btn-sm" style="background: #e2e8f0; color: #334155; padding: 2px 8px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer;" onclick="fillRemapTarget('${escapeHtml(name)}')">
+            + ${escapeHtml(name)}
+          </button>
+        `).join('');
+      } else {
+        chipsBox.style.display = 'none';
+      }
+
+      speakers.forEach((spk, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; background: #fff; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border);';
+        row.innerHTML = `
+          <div style="flex: 1; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <i class="fa-solid fa-user-circle" style="color: var(--primary);"></i>
+            <span class="remap-orig-speaker" data-orig="${escapeHtml(spk)}">${escapeHtml(spk)}</span>
+          </div>
+          <div style="color: var(--text-muted); font-size: 0.9rem;"><i class="fa-solid fa-arrow-right"></i></div>
+          <div style="flex: 1.2;">
+            <input type="text" id="remap-input-${idx}" class="form-input remap-target-input" data-orig="${escapeHtml(spk)}" placeholder="改為正確姓名 (留空則不變)" style="padding: 0.4rem 0.65rem; font-size: 0.88rem;" onfocus="activeRemapTargetInputId = 'remap-input-${idx}'">
+          </div>
+        `;
+        container.appendChild(row);
+      });
+
+      activeRemapTargetInputId = 'remap-input-0';
+      openModal('remap-speakers-modal');
+    }
+
+    function fillRemapTarget(name) {
+      if (activeRemapTargetInputId) {
+        const inp = document.getElementById(activeRemapTargetInputId);
+        if (inp) {
+          inp.value = name;
+          inp.focus();
+        }
+      }
+    }
+
+    async function submitSpeakerRemap() {
+      if (!currentMeetingData) return;
+      const inputs = document.querySelectorAll('.remap-target-input');
+      const speakerMapping = {};
+      let hasChanges = false;
+
+      inputs.forEach(inp => {
+        const orig = inp.dataset.orig;
+        const target = inp.value.trim();
+        if (target && target !== orig) {
+          speakerMapping[orig] = target;
+          hasChanges = true;
+        }
+      });
+
+      if (!hasChanges) {
+        showToast('未填寫任何需校正的發言人新姓名', 'info');
+        return;
+      }
+
+      const updateSummary = document.getElementById('remap-update-summary').checked;
+      const regenerateSummaryWithAI = document.getElementById('remap-ai-resummarize').checked;
+
+      const btn = document.getElementById('btn-submit-remap');
+      const origBtnHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 處理中...';
+
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.remapSpeakers, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            meetingId: currentMeetingData.id,
+            speakerMapping: speakerMapping,
+            updateSummary: updateSummary,
+            regenerateSummaryWithAI: regenerateSummaryWithAI
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message || '發言人與摘要已成功校正！', 'success');
+          closeModal('remap-speakers-modal');
+
+          // 即時更新前端記憶體資料並重繪
+          currentMeetingData.speakers = data.speakers;
+          currentMeetingData.dialogues = data.dialogues;
+          currentMeetingData.summary_text = data.summary_text;
+          currentMeetingData.transcript_text = data.transcript_text;
+          dialoguesData = data.dialogues;
+
+          document.getElementById('meeting-summary-text').textContent = data.summary_text || '尚未產生會議摘要。';
+          renderTranscript(dialoguesData);
+          await loadMeetings(); // 同步列表 speakers 顯示
+        } else {
+          showToast(data.message || '校正失敗', 'error');
+        }
+      } catch (err) {
+        showToast('請求異常: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origBtnHtml;
+      }
+    }
+
+    function quickRemapSentence(diagIdx, origSpeaker) {
+      if (currentMeetingData && currentMeetingData.is_shared_view) return;
+      document.getElementById('quick-remap-diag-index').value = diagIdx;
+      document.getElementById('quick-remap-orig-speaker').value = origSpeaker;
+      document.getElementById('quick-remap-current-label').textContent = origSpeaker;
+      const targetInput = document.getElementById('quick-remap-target-name');
+      targetInput.value = '';
+
+      const candidates = getCandidateSpeakerNames();
+      const chipsBox = document.getElementById('quick-remap-chips');
+      if (candidates.length > 0) {
+        chipsBox.innerHTML = candidates.map(name => `
+          <button type="button" class="btn btn-sm" style="background: #e2e8f0; color: #334155; padding: 2px 8px; font-size: 0.8rem; border-radius: 4px; border: none; cursor: pointer;" onclick="document.getElementById('quick-remap-target-name').value = '${escapeHtml(name)}'">
+            ${escapeHtml(name)}
+          </button>
+        `).join('');
+      } else {
+        chipsBox.innerHTML = '';
+      }
+
+      openModal('single-sentence-remap-modal');
+      setTimeout(() => targetInput.focus(), 150);
+    }
+
+    async function submitQuickSpeakerRemap() {
+      if (!currentMeetingData) return;
+      const diagIdx = document.getElementById('quick-remap-diag-index').value;
+      const origSpeaker = document.getElementById('quick-remap-orig-speaker').value;
+      const targetName = document.getElementById('quick-remap-target-name').value.trim();
+      const scopeRadios = document.getElementsByName('quick-remap-scope');
+      let scope = 'all';
+      for (const r of scopeRadios) {
+        if (r.checked) {
+          scope = r.value;
+          break;
+        }
+      }
+
+      if (!targetName) {
+        showToast('請輸入目標發言人姓名', 'warning');
+        return;
+      }
+
+      const payload = {
+        meetingId: currentMeetingData.id,
+        updateSummary: true,
+        regenerateSummaryWithAI: false
+      };
+
+      if (scope === 'all') {
+        payload.speakerMapping = { [origSpeaker]: targetName };
+      } else {
+        payload.sentenceOverrides = { [diagIdx]: targetName };
+      }
+
+      const btn = document.getElementById('btn-submit-quick-remap');
+      const origBtnHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 儲存中...';
+
+      const token = localStorage.getItem('recordv2_token');
+      try {
+        const res = await fetch(API.remapSpeakers, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('發言人已成功修改！', 'success');
+          closeModal('single-sentence-remap-modal');
+
+          currentMeetingData.speakers = data.speakers;
+          currentMeetingData.dialogues = data.dialogues;
+          currentMeetingData.summary_text = data.summary_text;
+          currentMeetingData.transcript_text = data.transcript_text;
+          dialoguesData = data.dialogues;
+
+          document.getElementById('meeting-summary-text').textContent = data.summary_text || '尚未產生會議摘要。';
+          renderTranscript(dialoguesData);
+          await loadMeetings();
+        } else {
+          showToast(data.message || '修改失敗', 'error');
+        }
+      } catch (err) {
+        showToast('請求異常: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origBtnHtml;
+      }
+    }
+
   </script>
+
+  <!-- 8. 發言人批次校正與摘要同步 Modal -->
+  <div id="remap-speakers-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-users-gear"></i> 會議發言人校正與摘要同步</h3>
+        <button class="close-btn" onclick="closeModal('remap-speakers-modal')">&times;</button>
+      </div>
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.1rem; line-height: 1.5;">
+        修正逐字稿中標註錯誤的人物姓名（例如 <code>Paul</code> &rarr; <code>Alan</code>、<code>Ivor</code> &rarr; <code>Joel</code>）。設定後系統將自動批次更新整份逐字稿，並同步更新會議重點摘要。
+      </p>
+
+      <!-- 常用人員標籤建議 -->
+      <div id="remap-candidate-chips" style="display: none; margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border-radius: 8px; border: 1px dashed var(--border);">
+        <div style="font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 0.4rem;">
+          <i class="fa-solid fa-tags"></i> 常用與會人員建議名單 (點擊可快速填入)：
+        </div>
+        <div id="remap-candidate-chips-list" style="display: flex; flex-wrap: wrap; gap: 0.35rem;"></div>
+      </div>
+
+      <div id="remap-speakers-list" style="display: flex; flex-direction: column; gap: 0.85rem; max-height: 320px; overflow-y: auto; padding-right: 4px; margin-bottom: 1.25rem;">
+        <!-- 動態渲染每個發言人的映射輸入框 -->
+      </div>
+
+      <div style="background: #f1f5f9; padding: 0.85rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.88rem; display: flex; flex-direction: column; gap: 0.5rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500; color: var(--text-main);">
+          <input type="checkbox" id="remap-update-summary" checked style="accent-color: var(--primary); width: 16px; height: 16px;">
+          同步取代會議摘要中的舊人名 (純文字極速替換)
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500; color: var(--text-main);">
+          <input type="checkbox" id="remap-ai-resummarize" style="accent-color: var(--primary); width: 16px; height: 16px;">
+          使用 Gemini AI 依據校正後的逐字稿重新總結摘要 (約需 3-5 秒，總結更自然精確)
+        </label>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-outline" onclick="closeModal('remap-speakers-modal')">取消</button>
+        <button id="btn-submit-remap" class="btn btn-primary" onclick="submitSpeakerRemap()">
+          <i class="fa-solid fa-check"></i> 確認套用校正
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. 單句發言人即時校正 Modal -->
+  <div id="single-sentence-remap-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fa-solid fa-user-pen"></i> 修改發言人</h3>
+        <button class="close-btn" onclick="closeModal('single-sentence-remap-modal')">&times;</button>
+      </div>
+      <input type="hidden" id="quick-remap-diag-index">
+      <input type="hidden" id="quick-remap-orig-speaker">
+      <div style="margin-bottom: 0.85rem; font-size: 0.9rem;">
+        目前發言人：<span id="quick-remap-current-label" style="font-weight: 700; color: var(--primary);"></span>
+      </div>
+      <div class="form-group" style="margin-bottom: 0.85rem;">
+        <label class="form-label" style="font-weight: 600;">改為發言人姓名：</label>
+        <input type="text" id="quick-remap-target-name" class="form-input" placeholder="輸入正確的發言人姓名" style="padding: 0.5rem 0.75rem;">
+      </div>
+      <div id="quick-remap-chips" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem;"></div>
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label" style="font-weight: 600;">套用範圍：</label>
+        <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88rem;">
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="radio" name="quick-remap-scope" value="all" checked style="accent-color: var(--primary);">
+            整場會議所有此人發言全數替換 (批次映射)
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="radio" name="quick-remap-scope" value="single" style="accent-color: var(--primary);">
+            僅修改此句發言
+          </label>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-outline" onclick="closeModal('single-sentence-remap-modal')">取消</button>
+        <button id="btn-submit-quick-remap" class="btn btn-primary" onclick="submitQuickSpeakerRemap()">
+          <i class="fa-solid fa-check"></i> 確認修改
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

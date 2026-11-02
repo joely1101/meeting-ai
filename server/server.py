@@ -1017,6 +1017,165 @@ def handle_api_post(handler):
         return True
 
     # 8.1 產生或撤銷會議唯讀分享 Token (含自訂有效期限)
+    
+    # 5.3 發言人批次校正與摘要同步 (Speaker Remap & Summary Sync)
+    if clean_path == "/api/meeting/remap_speakers":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            length = int(handler.headers.get("Content-Length", 0))
+            body = json.loads(handler.rfile.read(length).decode("utf-8")) if length > 0 else {}
+            meeting_id = body.get("meetingId")
+            speaker_mapping = body.get("speakerMapping", {})
+            sentence_overrides = body.get("sentenceOverrides", {})
+            update_summary = body.get("updateSummary", True)
+            regenerate_summary_ai = body.get("regenerateSummaryWithAI", False)
+
+            if not meeting_id:
+                send_json(handler, 400, {"status": "error", "message": "缺少 meetingId"})
+                return True
+
+            is_admin = (user["role"] == "admin")
+
+            # 尋找該會議所在的實體目錄
+            meeting_folder = None
+            possible_dirs = [
+                os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)
+            ]
+            if is_admin and os.path.exists(MEETINGS_DIR):
+                for uid in os.listdir(MEETINGS_DIR):
+                    p = os.path.join(MEETINGS_DIR, uid, meeting_id)
+                    if p not in possible_dirs:
+                        possible_dirs.append(p)
+
+            for m_path in possible_dirs:
+                if os.path.exists(m_path) and os.path.isdir(m_path):
+                    meeting_folder = m_path
+                    break
+
+            if not meeting_folder:
+                send_json(handler, 404, {"status": "error", "message": "找不到該會議或無編輯權限"})
+                return True
+
+            # 尋找逐字稿與摘要檔案
+            transcript_path = None
+            summary_path = None
+            for f in os.listdir(meeting_folder):
+                if f.endswith("_逐字稿.txt") or f.endswith("transcript.txt") or f.endswith("_逐字稿.md"):
+                    transcript_path = os.path.join(meeting_folder, f)
+                elif f.endswith("_會議摘要.txt") or f.endswith("summary.txt") or f.endswith("_會議摘要.md"):
+                    summary_path = os.path.join(meeting_folder, f)
+
+            if not transcript_path or not os.path.exists(transcript_path):
+                send_json(handler, 404, {"status": "error", "message": "找不到該會議的逐字稿檔案"})
+                return True
+
+            with open(transcript_path, "r", encoding="utf-8") as tf:
+                transcript_text = tf.read()
+
+            time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
+            
+            new_lines = []
+            parsed_dialogues = []
+            all_speakers = set()
+            line_idx = 0
+
+            for raw_line in transcript_text.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    new_lines.append("")
+                    continue
+                m = time_pattern.match(line)
+                if m:
+                    t_str, s1, s2, s3, txt = m.groups()
+                    orig_spk = (s1 or s2 or s3 or '').strip()
+                    if not orig_spk:
+                        orig_spk = '說話者'
+                    
+                    # 決定新說話者：優先檢查單句覆蓋，再檢查全場映射
+                    str_idx = str(line_idx)
+                    new_spk = orig_spk
+                    if str_idx in sentence_overrides and sentence_overrides[str_idx].strip():
+                        new_spk = sentence_overrides[str_idx].strip()
+                    elif orig_spk in speaker_mapping and speaker_mapping[orig_spk].strip():
+                        new_spk = speaker_mapping[orig_spk].strip()
+
+                    all_speakers.add(new_spk)
+                    clean_txt = (txt or '').lstrip(':： \t')
+                    new_line_str = f"[{t_str}] [{new_spk}]: {clean_txt}"
+                    new_lines.append(new_line_str)
+
+                    parts = [int(x) for x in t_str.split(':')]
+                    if len(parts) == 3:
+                        sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
+                    elif len(parts) == 2:
+                        sec = parts[0] * 60 + parts[1]
+                    else:
+                        sec = parts[0]
+
+                    parsed_dialogues.append({
+                        "sec": sec,
+                        "time": t_str,
+                        "speaker": new_spk,
+                        "text": clean_txt
+                    })
+                    line_idx += 1
+                else:
+                    new_lines.append(line)
+                    if parsed_dialogues:
+                        parsed_dialogues[-1]["text"] += " " + line
+
+            new_transcript_text = "\n".join(new_lines)
+            with open(transcript_path, "w", encoding="utf-8") as tf:
+                tf.write(new_transcript_text)
+
+            # 更新摘要
+            current_summary = ""
+            if summary_path and os.path.exists(summary_path):
+                with open(summary_path, "r", encoding="utf-8") as sf:
+                    current_summary = sf.read()
+
+            if regenerate_summary_ai:
+                try:
+                    api_key, _ = ai_transcriber.get_effective_api_key(user["id"])
+                    if not api_key:
+                        raise RuntimeError("無法調度 Gemini API Key，改為純文字替換摘要")
+                    current_summary = ai_transcriber.generate_summary_from_transcript(new_transcript_text, api_key)
+                except Exception as ex_ai:
+                    print(f"[Speaker Remap] AI 重新總結失敗，降級為純文字替換: {ex_ai}", flush=True)
+                    for old_name, target_name in speaker_mapping.items():
+                        if old_name and target_name and old_name != target_name:
+                            current_summary = current_summary.replace(old_name, target_name)
+            elif update_summary and current_summary:
+                for old_name, target_name in speaker_mapping.items():
+                    if old_name and target_name and old_name != target_name:
+                        current_summary = current_summary.replace(old_name, target_name)
+
+            if summary_path:
+                with open(summary_path, "w", encoding="utf-8") as sf:
+                    sf.write(current_summary)
+
+            # 更新資料庫中的 speakers 列表
+            sorted_speakers = sorted(list(all_speakers))
+            database.update_meeting_speakers(meeting_id, sorted_speakers, user_id=user["id"], is_admin=is_admin)
+
+            print(f"[Speaker Remap] 會議 {meeting_id} 已由使用者 {user['email']} 完成發言人校正: {speaker_mapping}", flush=True)
+
+            send_json(handler, 200, {
+                "status": "ok",
+                "message": "發言人校正與摘要已同步更新！",
+                "speakers": sorted_speakers,
+                "dialogues": parsed_dialogues,
+                "summary_text": current_summary,
+                "transcript_text": new_transcript_text
+            })
+        except Exception as e:
+            print(f"[Speaker Remap Error] {e}", flush=True)
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
     if clean_path == "/api/meeting/share":
         user = get_auth_user(handler.headers)
         if not user:

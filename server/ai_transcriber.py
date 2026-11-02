@@ -567,3 +567,50 @@ def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, 
         transcript_text = raw_text.split("===SUMMARY_END===")[1].strip()
 
     return summary_text, transcript_text, 0
+
+
+def generate_summary_from_transcript(transcript_text, api_key, profile_prompt_block="", candidate_models=None):
+    """
+    依據校正後的純文字逐字稿，使用 Gemini API 純文字模型快速重新生成結構化會議摘要（3-5秒無音訊極速產出）
+    """
+    summary_instruction = """
+請務必使用以下特定標籤包裹【會議摘要】：
+===SUMMARY_START===
+### 📊 會議摘要 (繁體中文)
+- 📌 核心重點與討論主題 (條列式整理)
+- ✅ 待辦事項與決策指派 (Action Items)
+===SUMMARY_END===
+**重要：無論會議是英文、中文或中英雙語，【會議摘要】請一律使用清晰的「繁體中文」進行結構化總結。**
+"""
+    profile_hint = f"\n【會議設定檔與熱詞參考】：\n{profile_prompt_block}\n" if profile_prompt_block else ""
+    
+    prompt = f"""這是一段已經過發言人校正的完整商務會議逐字稿。
+請仔細閱讀逐字稿各發言人的討論內容、決策與行動指派，為這場會議撰寫一份清晰、結構嚴謹的繁體中文會議摘要。
+特別注意：
+1. 必須精確參照逐字稿中最新校正的發言人姓名，在待辦事項與討論重點中清楚標示發言者與指派負責人。
+2. 保持精煉、條理分明。
+{profile_hint}
+{summary_instruction}
+
+【完整逐字稿內容】：
+{transcript_text}
+"""
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt}
+            ]
+        }],
+        "generationConfig": {
+            "temperature": 0.2
+        }
+    }
+    result_json, used_model = call_gemini_api(api_key, payload, candidate_models=candidate_models, timeout=90)
+    candidates = result_json.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("未能取得 AI 摘要回覆")
+    raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+    summary_text = raw_text
+    if "===SUMMARY_START===" in raw_text and "===SUMMARY_END===" in raw_text:
+        summary_text = raw_text.split("===SUMMARY_START===")[1].split("===SUMMARY_END===")[0].strip()
+    return summary_text
