@@ -766,6 +766,86 @@
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
+/* ==========================================================
+       彈窗系統與全設備響應式 (Modal & Mobile Optimization)
+       ========================================================== */
+    .modal-overlay {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: rgba(15, 23, 42, 0.72) !important;
+      backdrop-filter: blur(5px) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      z-index: 9999 !important;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      padding: 1rem !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+    }
+    .modal-overlay.open {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    .modal-box {
+      background: #ffffff !important;
+      border-radius: 16px !important;
+      width: 100% !important;
+      max-width: 580px !important;
+      padding: 1.5rem !important;
+      box-shadow: 0 20px 40px -15px rgba(0,0,0,0.3) !important;
+      transform: translateY(12px);
+      transition: transform 0.2s ease;
+      max-height: 90vh !important;
+      overflow-y: auto !important;
+      box-sizing: border-box !important;
+      margin: auto !important;
+    }
+    .modal-overlay.open .modal-box {
+      transform: translateY(0) !important;
+    }
+
+    /* 行動裝置 / 手機視窗 (所有小於 768px 或手機螢幕) */
+    @media (max-width: 768px), screen and (max-device-width: 768px) {
+      .modal-overlay {
+        padding: 0.6rem !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      .modal-box {
+        width: 94vw !important;
+        max-width: 94vw !important;
+        padding: 1.25rem 1rem !important;
+        border-radius: 14px !important;
+        max-height: 86vh !important;
+      }
+      .modal-header {
+        margin-bottom: 0.85rem !important;
+      }
+      .modal-title {
+        font-size: 1.1rem !important;
+      }
+      .user-tab-nav-container {
+        display: flex !important;
+        gap: 0.25rem !important;
+        margin-bottom: 1rem !important;
+        border-bottom: 2px solid var(--border) !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      .user-tab-btn {
+        padding: 0.45rem 0.65rem !important;
+        font-size: 0.85rem !important;
+        white-space: nowrap !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -838,6 +918,8 @@
             <i class="fa-brands fa-google" style="color: #ea4335;"></i> 以 Google 帳號快速登入
           </button>
         </div>
+      </div> <!-- /hero-section -->
+
       <!-- 特色功能卡片 -->
       <div class="features-grid">
         <div class="feature-card">
@@ -1315,12 +1397,12 @@
         <button class="close-btn" onclick="closeModal('user-settings-modal')">&times;</button>
       </div>
       <!-- 設定分頁導覽 -->
-      <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.25rem;">
-        <button id="user-tab-btn-profiles" class="btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary); padding: 0.5rem 1rem;" onclick="switchUserTab('profiles')">
-          <i class="fa-solid fa-sliders"></i> 會議分類 Profile (提示詞範本)
+      <div class="user-tab-nav-container" style="display: flex; gap: 0.35rem; border-bottom: 2px solid var(--border); margin-bottom: 1.1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+        <button id="user-tab-btn-profiles" class="user-tab-btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary); padding: 0.55rem 0.85rem; white-space: nowrap; font-size: 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0;" onclick="switchUserTab('profiles')">
+          <i class="fa-solid fa-sliders"></i> 會議分類 Profile
         </button>
-        <button id="user-tab-btn-security" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.5rem 1rem;" onclick="switchUserTab('security')">
-          <i class="fa-solid fa-key"></i> 個人 API Key & 安全性
+        <button id="user-tab-btn-security" class="user-tab-btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.55rem 0.85rem; white-space: nowrap; font-size: 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0;" onclick="switchUserTab('security')">
+          <i class="fa-solid fa-key"></i> 個人 API Key & 密碼
         </button>
       </div>
 
@@ -1462,10 +1544,11 @@
             <i class="fa-solid fa-check"></i> 確認修改密碼
           </button>
         </form>
-      </div>
+      </div> <!-- /user-password-section -->
+    </div> <!-- /user-tab-security-view -->
 
-    </div>
-  </div>
+    </div> <!-- /modal-box -->
+  </div> <!-- /user-settings-modal -->
 
   <!-- 6. 修改會議標題 Modal -->
   <div id="edit-title-modal" class="modal-overlay">
