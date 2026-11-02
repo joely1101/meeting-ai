@@ -20,12 +20,13 @@ CHUNK_DURATION_SEC = 1800
 
 # 預設候選模型優先順序（最新穩定模型優先）
 CANDIDATE_MODELS = [
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest",
     "gemini-3.8-flash",
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
-    "gemini-3.7-flash"
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest"
 ]
 
 def load_config():
@@ -101,7 +102,7 @@ def parse_relative_time(t_str):
         return parts[0] * 60 + parts[1]
     return parts[0]
 
-def call_gemini_api(api_key, payload, candidate_models=None, timeout=180):
+def call_gemini_api(api_key, payload, candidate_models=None, timeout=300):
     """嘗試候選模型呼叫 Gemini API，自帶錯誤容錯重試"""
     if candidate_models is None:
         candidate_models = CANDIDATE_MODELS
@@ -163,7 +164,7 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
             if profile.get("location_context"):
                 profile_instructions.append(f"【開會背景/環境】：{profile['location_context']}")
             if profile.get("speakers"):
-                profile_instructions.append(f"【已知與會人員名單】：{profile['speakers']}（請特別對照此名單進行說話人識別 Speaker Diarization，若辨識到相應說話者請直接標記真實姓名）")
+                profile_instructions.append(f"【已知與會人員名單（核心依據）】：{profile['speakers']}（本場會議主要由上述名單中的人員發言。請務必依據語調、聲音特徵及上下文稱呼，優先將說話者精確標註為對應姓名）")
             if profile.get("keywords"):
                 profile_instructions.append(f"【專有名詞與熱詞庫】：{profile['keywords']}（音訊中若有發音相近、同音異字或模糊詞彙，請務必以此詞庫進行專業校正）")
             if profile.get("prompt_hint"):
@@ -337,7 +338,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
 請將這段音訊轉錄為精確的逐字稿，要求如下：
 1. 格式：[MM:SS] [說話者]: 對話內容
 2. 時間軸 [MM:SS] 請標註相對於本切片開頭的時間。
-3. 必須進行人物聲音識別 (Speaker Diarization)，明確區分說話者（例如：[說話者 A]、[說話者 B]，若對話中有提及姓名如 [Iris]、[Adam]、[Steven] 請直接標註姓名）。
+3. 必須嚴格進行人物聲音識別 (Speaker Diarization)，精準分離不同的說話者（例如：[說話者 A]、[說話者 B]，若對話中有提及姓名或有與會者名單如 [Iris]、[Adam]、[Steven] 請直接標註真實姓名）。嚴禁將所有人全部標記為相同的 [說話者]。
 {speaker_hint}
 【會議設定檔與熱詞參考】：
 {profile_prompt_block}
@@ -522,11 +523,14 @@ def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, 
    - 【逐字稿】：必須忠實保留說話者的「原文」（英文發言就記錄英文原文，中文發言就記錄繁體中文，中英夾雜則維持原樣，切勿將逐字稿翻譯）。
    - 【會議摘要】：無論錄音使用何種語言，一律使用「繁體中文」進行重點總結。
 3. 逐字稿必須標註時間軸 [MM:SS] 或 [HH:MM:SS]。
-4. 必須進行人物聲音識別 (Speaker Diarization)，明確區分不同的說話者（例如：「[說話者 A]」、「[說話者 B]」，或若對話中有提及姓名可直接標註例如「[Shelly]」、「[Joel]」）。
+4. 必須嚴格進行人物聲音識別 (Speaker Diarization)，精確分離每位不同的發言人：
+   - 務必依據聲音音調、音色特徵、語調高低、口音以及對話中的相互稱呼（例如發言前提到對方名字或問答互動）仔細區分不同說話者。
+   - 若有提供【已知與會人員名單】，請優先將各段發言比對歸屬至名單中的人物姓名（例如：「[Joel]」、「[Paul]」、「[Ivor]」等）。
+   - 若無法確認對應姓名，也必須依據聲線特徵明確標記不同代號（例如：「[說話者 A]」、「[說話者 B]」、「[說話者 C]」）。
+   - 【重要防呆規範】：本錄音為多人會議，**嚴禁將整場會議所有發言全部標為同一個 [說話者]**，必須確實標出對話輪替與不同角色！
    每句格式範例：
    [00:15] [說話者 A]: 大家好，今天會議開始。
    [00:20] [說話者 B]: 收到，請繼續。
-   若錄音中無法明確區分不同發言人，也請一律統一標註 [說話者]: ...
 5. 保持語句通順，自動校正語音辨識的同音錯字與常見 IT/商業術語。
 {summary_instruction}
 """
