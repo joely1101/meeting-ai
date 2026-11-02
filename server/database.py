@@ -14,10 +14,8 @@ if hasattr(time, "tzset"):
 import json
 import re
 
-SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.abspath(os.path.join(SERVER_DIR, "..", "data"))
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "record.db")
+DB_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(DB_DIR, "recordv2.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -52,29 +50,23 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
-        password_hash TEXT DEFAULT '',
-        salt TEXT DEFAULT '',
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'user', -- 'admin' 或 'user'
         is_active INTEGER NOT NULL DEFAULT 1,
-        email_verified INTEGER NOT NULL DEFAULT 1,
+        email_verified INTEGER NOT NULL DEFAULT 0,
         verify_token TEXT,
         api_key TEXT DEFAULT '',
-        avatar_url TEXT DEFAULT '',
-        auth_provider TEXT DEFAULT 'local', -- 'google' 或 'local'
         created_at TEXT NOT NULL,
         last_login TEXT
     )
     """)
 
-    # 確保欄位齊全
+    # 檢查是否需要升級 users 表 (新增 api_key 欄位)
     cursor.execute("PRAGMA table_info(users)")
     cols = [c[1] for c in cursor.fetchall()]
     if "api_key" not in cols:
         cursor.execute("ALTER TABLE users ADD COLUMN api_key TEXT DEFAULT ''")
-    if "avatar_url" not in cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''")
-    if "auth_provider" not in cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'")
 
     # 2. 登入 Session 資料表
     cursor.execute("""
@@ -102,6 +94,7 @@ def init_db():
         speakers_json TEXT NOT NULL DEFAULT '[]',
         dialogue_count INTEGER NOT NULL DEFAULT 0,
         share_token TEXT DEFAULT '',
+        share_expires_at TEXT DEFAULT '',
         created_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     )
@@ -115,6 +108,11 @@ def init_db():
     if "share_expires_at" not in m_cols:
         cursor.execute("ALTER TABLE meetings ADD COLUMN share_expires_at TEXT DEFAULT ''")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_meetings_share_token ON meetings(share_token)")
+    # 檢查 meetings 欄位升級 (profile_id, profile_name)
+    if "profile_id" not in m_cols:
+        cursor.execute("ALTER TABLE meetings ADD COLUMN profile_id INTEGER DEFAULT NULL")
+    if "profile_name" not in m_cols:
+        cursor.execute("ALTER TABLE meetings ADD COLUMN profile_name TEXT DEFAULT ''")
 
     # 4. 系統 API Key 資源池資料表 (Key Pool)
     cursor.execute("""
@@ -129,99 +127,156 @@ def init_db():
     )
     """)
 
-    # 系統啟動時保持 Key Pool 為空，由 Admin 自行新增配置，不含任何私人 Key
+    # 5. Teams Bot 預約排程與自動撥入資料表
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS teams_bot_tasks (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        teams_url TEXT NOT NULL,
+        bot_name TEXT NOT NULL DEFAULT 'AI 會議記錄助理',
+        scheduled_at TEXT NOT NULL, -- 'YYYY-MM-DD HH:MM:SS'
+        max_duration_min INTEGER NOT NULL DEFAULT 60,
+        notify_email TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'scheduled', -- 'scheduled', 'joining', 'in_lobby', 'recording', 'transcribing', 'completed', 'failed', 'cancelled'
+        meeting_id TEXT DEFAULT '',
+        error_message TEXT DEFAULT '',
+        created_at TEXT NOT NULL,
+        started_at TEXT DEFAULT '',
+        ended_at TEXT DEFAULT '',
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+    """)
+
+    # 檢查是否需要升級 teams_bot_tasks 表 (新增 notify_email 欄位)
+    cursor.execute("PRAGMA table_info(teams_bot_tasks)")
+    bot_cols = [c[1] for c in cursor.fetchall()]
+    if "notify_email" not in bot_cols:
+        cursor.execute("ALTER TABLE teams_bot_tasks ADD COLUMN notify_email TEXT DEFAULT ''")
+    if "profile_id" not in bot_cols:
+        cursor.execute("ALTER TABLE teams_bot_tasks ADD COLUMN profile_id INTEGER DEFAULT NULL")
+
+    # 6. 會議 Profile (提示詞範本 / 設定檔)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS meeting_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        speakers TEXT DEFAULT '',
+        keywords TEXT DEFAULT '',
+        location_context TEXT DEFAULT '',
+        prompt_hint TEXT DEFAULT '',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_meeting_profiles_user ON meeting_profiles(user_id)")
+
+    # 檢查是否需要初始化 Key Pool (載入預設 key)
+    cursor.execute("SELECT COUNT(*) FROM system_keys")
+    if cursor.fetchone()[0] == 0:
+        cfg_path = os.path.join(DB_DIR, "config.json")
+        default_key = ""
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg_data = json.load(f)
+                    default_key = cfg_data.get("gemini_api_key", "").strip()
+            except Exception:
+                pass
+        if not default_key:
+            default_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+        INSERT OR IGNORE INTO system_keys (api_key, note, is_active, usage_count, created_at)
+        VALUES (?, '系統預設 Gemini Key', 1, 0, ?)
+        """, (default_key, now_str))
+        print("Initialized system key pool with default Gemini key.")
+
     conn.commit()
 
-    # 檢查是否需要建立預設 Admin 本地應急帳號
-    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower() or "admin@local"
-    admin_password = os.environ.get("ADMIN_PASSWORD", "").strip() or "admin888"
-
-    cursor.execute("SELECT id FROM users WHERE role = 'admin'")
-    existing_admin = cursor.fetchone()
-    if not existing_admin:
-        pwd_hash, salt = hash_password(admin_password)
+    # 檢查是否需要建立預設 Admin 帳號 (預設密碼 teams)
+    cursor.execute("SELECT id FROM users WHERE email = 'admin@hawkeyetech.com.tw'")
+    admin = cursor.fetchone()
+    if not admin:
+        pwd_hash, salt = hash_password("teams")
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
-        INSERT OR IGNORE INTO users (email, name, password_hash, salt, role, is_active, email_verified, auth_provider, created_at)
-        VALUES (?, '系統管理員', ?, ?, 'admin', 1, 1, 'local', ?)
-        """, (admin_email, pwd_hash, salt, now))
+        INSERT INTO users (email, name, password_hash, salt, role, is_active, email_verified, created_at)
+        VALUES (?, ?, ?, ?, ?, 1, 1, ?)
+        """, ("admin@hawkeyetech.com.tw", "系統管理員", pwd_hash, salt, "admin", now))
         conn.commit()
-        print(f"[*] Initialized default admin: {admin_email}")
+        print("Initialized default admin user: admin@hawkeyetech.com.tw / teams")
 
     conn.close()
 
 # ----------------- 使用者認證與管理 -----------------
 
-def get_or_create_google_user(email, name, picture=""):
-    """
-    透過 Google OAuth 完成登入/註冊：
-    若無此使用者則自動建立，若為系統首位使用者或與 ADMIN_EMAIL 相符則賦予 admin 權限。
-    回傳 session token 與使用者資訊。
-    """
+ALLOWED_DOMAIN = "@hawkeyetech.com.tw"
+
+def register_user(name, email, password):
     email = email.strip().lower()
-    name = (name or "").strip() or email.split("@")[0]
+    name = name.strip()
+
+    if not email.endswith(ALLOWED_DOMAIN):
+        raise ValueError(f"限制僅能使用 {ALLOWED_DOMAIN} 企業信箱進行註冊！")
+
+    if len(password) < 6:
+        raise ValueError("密碼長度至少需 6 個字元以上！")
+
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    if cursor.fetchone():
+        conn.close()
+        raise ValueError("此信箱已被註冊！")
 
-    admin_env_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    pwd_hash, salt = hash_password(password)
+    verify_token = secrets.token_urlsafe(32)
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    if not user:
-        cursor.execute("SELECT COUNT(*) FROM users")
-        user_count = cursor.fetchone()[0]
-        # 若為首位使用者或與 ADMIN_EMAIL 符合，則升為 admin
-        is_admin = (user_count == 0) or (bool(admin_env_email) and email == admin_env_email)
-        role = "admin" if is_admin else "user"
-
-        cursor.execute("""
-        INSERT INTO users (email, name, role, is_active, email_verified, avatar_url, auth_provider, created_at, last_login)
-        VALUES (?, ?, ?, 1, 1, ?, 'google', ?, ?)
-        """, (email, name, role, picture, now_str, now_str))
-        conn.commit()
-        user_id = cursor.lastrowid
-        user_role = role
-    else:
-        user_id = user["id"]
-        user_role = user["role"]
-        if admin_env_email and email == admin_env_email and user_role != "admin":
-            user_role = "admin"
-            cursor.execute("UPDATE users SET role = 'admin' WHERE id = ?", (user_id,))
-
-        if user["is_active"] != 1:
-            conn.close()
-            raise ValueError("此帳號已被管理員停用，請洽詢管理員。")
-
-        cursor.execute("UPDATE users SET name = ?, avatar_url = ?, last_login = ?, email_verified = 1 WHERE id = ?",
-                       (name or user["name"], picture or user["avatar_url"], now_str, user_id))
-        conn.commit()
-
-    # 建立 Session Token
-    token = secrets.token_hex(32)
-    now = datetime.datetime.now()
-    expires = (now + datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
-
-    cursor.execute("INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-                   (token, user_id, expires, now_str))
+    cursor.execute("""
+    INSERT INTO users (email, name, password_hash, salt, role, is_active, email_verified, verify_token, created_at)
+    VALUES (?, ?, ?, ?, 'user', 1, 0, ?, ?)
+    """, (email, name or email.split('@')[0], pwd_hash, salt, verify_token, now))
     conn.commit()
+    user_id = cursor.lastrowid
     conn.close()
 
     return {
-        "token": token,
-        "user": {
-            "id": user_id,
-            "email": email,
-            "name": name,
-            "role": user_role,
-            "avatar_url": picture
-        }
+        "user_id": user_id,
+        "email": email,
+        "name": name,
+        "verify_token": verify_token
     }
 
+def verify_email_token(token):
+    if not token:
+        return False, "無效的驗證碼"
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, email, is_active, email_verified FROM users WHERE verify_token = ?", (token,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "驗證連結無效或已過期"
+
+    if row["email_verified"] == 1:
+        conn.close()
+        return True, "帳號先前已經驗證完成，請直接登入！"
+
+    cursor.execute("UPDATE users SET email_verified = 1, verify_token = NULL WHERE id = ?", (row["id"],))
+    conn.commit()
+    conn.close()
+    return True, "帳號驗證成功！您現在可以開始使用系統。"
+
 def authenticate_user(email, password):
-    """本地帳號密碼登入 (供管理員或離線維護使用)"""
     email = email.strip().lower()
     conn = get_db()
     cursor = conn.cursor()
@@ -234,12 +289,17 @@ def authenticate_user(email, password):
 
     if user["is_active"] != 1:
         conn.close()
-        return None, "此帳號已被管理員停用"
+        return None, "此帳號已被管理員停用，請聯絡管理員"
 
-    if not user["password_hash"] or not verify_password(password, user["password_hash"], user["salt"]):
+    if user["email_verified"] != 1:
+        conn.close()
+        return None, "帳號尚未驗證啟用！請檢查您的 hawkeyetech.com.tw 電子郵件信箱並點擊啟用連結"
+
+    if not verify_password(password, user["password_hash"], user["salt"]):
         conn.close()
         return None, "帳號或密碼錯誤"
 
+    # 建立 Session Token
     token = secrets.token_hex(32)
     now = datetime.datetime.now()
     expires = (now + datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
@@ -269,7 +329,7 @@ def get_user_by_session(token):
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute("""
-    SELECT u.id, u.email, u.name, u.role, u.is_active, u.email_verified, u.api_key, u.avatar_url, u.auth_provider
+    SELECT u.id, u.email, u.name, u.role, u.is_active, u.email_verified, u.api_key
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token = ? AND s.expires_at > ? AND u.is_active = 1
@@ -281,7 +341,7 @@ def get_user_by_session(token):
         raw_key = d.get("api_key", "") or ""
         d["has_custom_api_key"] = bool(raw_key.strip())
         d["api_key_masked"] = mask_key(raw_key)
-        del d["api_key"]
+        del d["api_key"] # 不外洩完整 key 給前端
         return d
     return None
 
@@ -296,13 +356,13 @@ def set_user_api_key(user_id, api_key):
     return True
 
 def change_user_password(user_id, current_password, new_password):
-    """使用者修改自身密碼 (限本地登入帳號)"""
+    """使用者修改自身登入密碼"""
     if not new_password or len(new_password) < 4:
         return False, "新密碼長度至少需 4 個字元以上！"
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, password_hash, salt, is_active, auth_provider FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, password_hash, salt, is_active FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     if not user:
         conn.close()
@@ -312,11 +372,7 @@ def change_user_password(user_id, current_password, new_password):
         conn.close()
         return False, "帳號已被停用"
 
-    if user["auth_provider"] == "google":
-        conn.close()
-        return False, "您的帳號使用 Google 授權驗證登入，帳號安全由 Google 全權管理，無須在本系統修改密碼。"
-
-    if user["password_hash"] and not verify_password(current_password, user["password_hash"], user["salt"]):
+    if not verify_password(current_password, user["password_hash"], user["salt"]):
         conn.close()
         return False, "目前密碼輸入錯誤，請重新確認！"
 
@@ -346,23 +402,22 @@ def delete_session(token):
 
 # ----------------- Admin 管理介面 -----------------
 
-def set_admin_password(new_password="admin888", email=None):
+def set_admin_password(new_password="teams", email="admin@hawkeyetech.com.tw"):
     """更新或重設 Admin 密碼"""
-    if not email:
-        email = os.environ.get("ADMIN_EMAIL", "").strip().lower() or "admin@local"
     conn = get_db()
     cursor = conn.cursor()
     pwd_hash, salt = hash_password(new_password)
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    cursor.execute("SELECT id FROM users WHERE email = ? OR role = 'admin'", (email,))
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
     row = cursor.fetchone()
     if row:
         cursor.execute("""
         UPDATE users
-        SET email = ?, password_hash = ?, salt = ?, is_active = 1, email_verified = 1
+        SET password_hash = ?, salt = ?, is_active = 1, email_verified = 1
         WHERE id = ?
-        """, (email, pwd_hash, salt, row["id"]))
+        """, (pwd_hash, salt, row["id"]))
+        # 清除既有 session 迫使以新密碼登入
         cursor.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
         conn.commit()
         conn.close()
@@ -380,7 +435,7 @@ def get_all_users():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-    SELECT u.id, u.email, u.name, u.role, u.is_active, u.email_verified, u.api_key, u.avatar_url, u.auth_provider, u.created_at, u.last_login,
+    SELECT u.id, u.email, u.name, u.role, u.is_active, u.email_verified, u.api_key, u.created_at, u.last_login,
            (SELECT COUNT(*) FROM meetings m WHERE m.user_id = u.id) AS meeting_count
     FROM users u
     ORDER BY u.id DESC
@@ -476,7 +531,8 @@ def toggle_system_key(key_id, active):
 def get_next_balanced_api_key(exclude_keys=None):
     """
     動態負載平衡 (Least-Used Dynamic Balancing):
-    從啟用的系統 Key Pool 中選取使用次數最少 (usage_count 最低) 的 Key。
+    從啟用的系統 Key Pool 中選取使用次數最少 (usage_count 最低) 的 Key，
+    次數相同時優先選取最久未使用 (或未曾使用) 者，分散並發請求。
     """
     conn = get_db()
     cursor = conn.cursor()
@@ -514,8 +570,8 @@ def save_meeting_record(meeting_data):
     INSERT OR REPLACE INTO meetings (
         id, user_id, title, date, duration_sec, duration_str,
         audio_file, summary_file, transcript_file, speakers_json,
-        dialogue_count, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dialogue_count, profile_id, profile_name, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         meeting_data["id"],
         meeting_data["user_id"],
@@ -528,6 +584,8 @@ def save_meeting_record(meeting_data):
         meeting_data.get("transcript_file"),
         json.dumps(meeting_data.get("speakers", []), ensure_ascii=False),
         meeting_data.get("dialogue_count", 0),
+        meeting_data.get("profile_id"),
+        meeting_data.get("profile_name", ""),
         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     conn.commit()
@@ -677,7 +735,7 @@ def index_existing_meetings(meetings_base_dir):
     if not os.path.exists(meetings_base_dir):
         return
     time_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(?:\[([^\]]+)\]|\(([^)]+)\)|([^：:\n\[\(]{1,30})[：:])?\s*(.*)$')
-
+    
     for user_entry in os.listdir(meetings_base_dir):
         if user_entry.lower() in ('tobedelete', 'to_be_delete', '.git', 'temp', 'tmp'):
             continue
@@ -687,15 +745,16 @@ def index_existing_meetings(meetings_base_dir):
         try:
             user_id = int(user_entry)
         except ValueError:
-            user_id = 1
-
+            user_id = 1 # 預設分配給 Admin
+        
         for m_folder_name in os.listdir(user_folder):
             if m_folder_name.lower() in ('tobedelete', 'to_be_delete', '.git', 'temp', 'tmp'):
                 continue
             m_path = os.path.join(user_folder, m_folder_name)
             if not os.path.isdir(m_path):
                 continue
-
+            
+            # 檢查是否已在 DB
             conn = get_db()
             c = conn.cursor()
             c.execute("SELECT id FROM meetings WHERE id = ?", (m_folder_name,))
@@ -765,6 +824,7 @@ def index_existing_meetings(meetings_base_dir):
             else:
                 dur_str = f"{dur_m:02d}:{dur_s:02d}"
 
+            # 智慧標題 (優先讀取自訂 title.txt)
             title = m_folder_name
             title_file = os.path.join(m_path, "title.txt")
             if os.path.exists(title_file):
@@ -775,6 +835,10 @@ def index_existing_meetings(meetings_base_dir):
                             title = t
                 except Exception:
                     pass
+            elif "Dell" in summary_text or "Hawkeye" in summary_text:
+                title = "Dell 與 Hawkeye (Foxconn) DPU 專案商務與樣品交付技術會議"
+            elif "Ribbon" in summary_text or "RBBN" in m_folder_name.upper() or "6WIND" in summary_text:
+                title = "Ribbon (RBBN) 團隊工程架構同步會議 (D2 / 6WIND / 8200 / 8500)"
             elif summary_text:
                 for sl in summary_text.splitlines():
                     clean_sl = sl.strip().lstrip('#-*• \t')
@@ -801,6 +865,224 @@ def index_existing_meetings(meetings_base_dir):
                 "speakers": sorted(list(speakers)),
                 "dialogue_count": dialogue_count
             })
+
+# ==========================================================
+# Teams Bot 預約排程與撥入任務資料庫操作
+# ==========================================================
+
+def create_bot_task(user_id, title, teams_url, scheduled_at, max_duration_min=60, bot_name="AI 會議記錄助理", notify_email="", profile_id=None):
+    conn = get_db()
+    cursor = conn.cursor()
+    task_id = f"bot_{int(time.time() * 1000)}_{secrets.token_hex(4)}"
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+    INSERT INTO teams_bot_tasks (id, user_id, title, teams_url, bot_name, scheduled_at, max_duration_min, notify_email, profile_id, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
+    """, (task_id, user_id, title.strip(), teams_url.strip(), bot_name.strip() or "AI 會議記錄助理", scheduled_at.strip(), max_duration_min, (notify_email or "").strip(), profile_id, now_str))
+    conn.commit()
+    conn.close()
+    return get_bot_task(task_id)
+
+def get_bot_task(task_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM teams_bot_tasks WHERE id = ?", (task_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_user_bot_tasks(user_id, is_admin=False):
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_admin:
+        cursor.execute("SELECT t.*, u.name as user_name, u.email as user_email FROM teams_bot_tasks t JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC")
+    else:
+        cursor.execute("SELECT * FROM teams_bot_tasks WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_due_bot_tasks():
+    conn = get_db()
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("SELECT * FROM teams_bot_tasks WHERE status = 'scheduled' AND scheduled_at <= ? ORDER BY scheduled_at ASC", (now_str,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def update_bot_task(task_id, **kwargs):
+    conn = get_db()
+    cursor = conn.cursor()
+    fields = []
+    values = []
+    for k, v in kwargs.items():
+        fields.append(f"{k} = ?")
+        values.append(v)
+    values.append(task_id)
+    cursor.execute(f"UPDATE teams_bot_tasks SET {', '.join(fields)} WHERE id = ?", tuple(values))
+    conn.commit()
+    conn.close()
+    return get_bot_task(task_id)
+
+def cancel_bot_task(task_id, user_id, is_admin=False):
+    conn = get_db()
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if is_admin:
+        cursor.execute("UPDATE teams_bot_tasks SET status = 'cancelled', ended_at = ? WHERE id = ? AND status IN ('scheduled', 'joining', 'in_lobby', 'recording')", (now_str, task_id))
+    else:
+        cursor.execute("UPDATE teams_bot_tasks SET status = 'cancelled', ended_at = ? WHERE id = ? AND user_id = ? AND status IN ('scheduled', 'joining', 'in_lobby', 'recording')", (now_str, task_id, user_id))
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected
+
+def delete_bot_task(task_id, user_id, is_admin=False):
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_admin:
+        cursor.execute("DELETE FROM teams_bot_tasks WHERE id = ?", (task_id,))
+    else:
+        cursor.execute("DELETE FROM teams_bot_tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected
+
+
+# ----------------- 會議 Profile (提示詞範本 / 設定檔) -----------------
+
+DEFAULT_PROFILES = [
+    {
+        "name": "👔 主管會議 / 營運週會",
+        "speakers": "Joel, Iris, Steven, Eric, 總經理",
+        "keywords": "瑞祺, 澔楷, 營收, 毛利, 開票, 盤點, 職場霸凌, SMQ, 倉租",
+        "location_context": "台灣總部會議室，部分人員遠端連線",
+        "prompt_hint": "著重在各部門營運進度、決策方針、待追蹤事項與責任歸屬。",
+        "is_default": 1
+    },
+    {
+        "name": "🤝 客戶會議 (Ribbon / Adam)",
+        "speakers": "Adam, Iris, Steven, Joel, Loomis",
+        "keywords": "8300, 8200, 5512, QBR, Cost Gap 15%, Little Fuse, PPV, ICT, A-Team, 瑞祺, 澔楷",
+        "location_context": "跨國連線視訊會議 (台灣/美國)，中英雙語混合",
+        "prompt_hint": "著重在客戶需求、QBR 行程安排、商務報價談判與技術架構決策。",
+        "is_default": 0
+    }
+]
+
+def init_user_default_profiles(user_id, cursor=None):
+    """若使用者尚無任何 Profile，自動初始化預設範本"""
+    need_close = False
+    if cursor is None:
+        conn = get_db()
+        cursor = conn.cursor()
+        need_close = True
+    else:
+        conn = None
+
+    cursor.execute("SELECT COUNT(*) FROM meeting_profiles WHERE user_id = ?", (user_id,))
+    count = cursor.fetchone()[0]
+    if count == 0:
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for p in DEFAULT_PROFILES:
+            cursor.execute("""
+            INSERT INTO meeting_profiles (user_id, name, speakers, keywords, location_context, prompt_hint, is_default, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, p["name"], p["speakers"], p["keywords"], p["location_context"], p["prompt_hint"], p["is_default"], now_str, now_str))
+        if conn:
+            conn.commit()
+
+    if need_close and conn:
+        conn.close()
+
+def get_user_profiles(user_id):
+    """取得指定使用者的所有 Profile（若無則自動建置預設）"""
+    init_user_default_profiles(user_id)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, user_id, name, speakers, keywords, location_context, prompt_hint, is_default, created_at, updated_at
+    FROM meeting_profiles
+    WHERE user_id = ?
+    ORDER BY is_default DESC, id ASC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_profile_by_id(profile_id, user_id=None):
+    """根據 ID 取得特定 Profile"""
+    if not profile_id:
+        return None
+    conn = get_db()
+    cursor = conn.cursor()
+    if user_id is not None:
+        cursor.execute("SELECT * FROM meeting_profiles WHERE id = ? AND user_id = ?", (profile_id, user_id))
+    else:
+        cursor.execute("SELECT * FROM meeting_profiles WHERE id = ?", (profile_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_default_profile_for_user(user_id):
+    """取得使用者的預設 Profile"""
+    init_user_default_profiles(user_id)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM meeting_profiles WHERE user_id = ? AND is_default = 1 LIMIT 1", (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute("SELECT * FROM meeting_profiles WHERE user_id = ? ORDER BY id ASC LIMIT 1", (user_id,))
+        row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def save_user_profile(user_id, profile_id, name, speakers="", keywords="", location_context="", prompt_hint="", is_default=0):
+    """新增或修改使用者的 Profile"""
+    clean_name = (name or "").strip()
+    if not clean_name:
+        raise ValueError("Profile 名稱不可為空")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if is_default:
+        cursor.execute("UPDATE meeting_profiles SET is_default = 0 WHERE user_id = ?", (user_id,))
+
+    if profile_id:
+        cursor.execute("""
+        UPDATE meeting_profiles
+        SET name = ?, speakers = ?, keywords = ?, location_context = ?, prompt_hint = ?, is_default = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+        """, (clean_name, (speakers or "").strip(), (keywords or "").strip(), (location_context or "").strip(), (prompt_hint or "").strip(), 1 if is_default else 0, now_str, profile_id, user_id))
+        target_id = profile_id
+    else:
+        cursor.execute("""
+        INSERT INTO meeting_profiles (user_id, name, speakers, keywords, location_context, prompt_hint, is_default, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, clean_name, (speakers or "").strip(), (keywords or "").strip(), (location_context or "").strip(), (prompt_hint or "").strip(), 1 if is_default else 0, now_str, now_str))
+        target_id = cursor.lastrowid
+
+    conn.commit()
+    conn.close()
+    return target_id
+
+def delete_user_profile(user_id, profile_id):
+    """刪除指定 Profile"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM meeting_profiles WHERE id = ? AND user_id = ?", (profile_id, user_id))
+    affected = cursor.rowcount
+    cursor.execute("SELECT id FROM meeting_profiles WHERE user_id = ? AND is_default = 1", (user_id,))
+    has_default = cursor.fetchone()
+    if not has_default:
+        cursor.execute("UPDATE meeting_profiles SET is_default = 1 WHERE id = (SELECT id FROM meeting_profiles WHERE user_id = ? ORDER BY id ASC LIMIT 1)", (user_id,))
+    conn.commit()
+    conn.close()
+    return affected > 0
 
 if __name__ == "__main__":
     init_db()

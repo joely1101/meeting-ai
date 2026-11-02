@@ -1104,7 +1104,29 @@
           <label class="form-label">會議自訂標題 (可選)</label>
           <input type="text" id="upload-title" class="form-input" placeholder="留空則由 AI 自動分析主題">
         </div>
+        
         <div class="form-group">
+          <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> 會議分類 Profile</span>
+            <a href="javascript:void(0)" onclick="closeModal('upload-modal'); openUserSettingsModal('profiles')" style="font-size: 0.8rem; color: var(--primary); text-decoration: none; font-weight: 600;">
+              <i class="fa-solid fa-gear"></i> 管理範本
+            </a>
+          </label>
+          <select id="upload-profile-select" class="form-input" onchange="onUploadProfileChanged(this.value)">
+            <option value="">載入中...</option>
+          </select>
+          <div id="upload-profile-preview" style="display: none; margin-top: 0.45rem; padding: 0.5rem 0.75rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; font-size: 0.8rem; line-height: 1.45; color: #475569;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="font-size: 0.82rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+            <span>本次會議補充關鍵字 / 臨時提示 (選填)</span>
+            <span style="font-size: 0.75rem; color: #94a3b8;">如臨時與會者或專案代號</span>
+          </label>
+          <input type="text" id="upload-custom-prompt" class="form-input" placeholder="例如：本次有新客戶 Jason 參加，重點討論 1/14 QBR 行程">
+        </div>
+<div class="form-group">
           <label class="form-label">選擇會議錄音檔案 (MP3 / M4A / WAV)</label>
           <input type="file" id="upload-file" class="form-input" accept=".mp3,.m4a,.wav,.aac,.flac" required>
         </div>
@@ -1134,7 +1156,19 @@
           <input type="text" id="bot-meeting-title" class="form-input" placeholder="例如: 產品架構同步與進度會議" required>
         </div>
 
+        
         <div class="form-group">
+          <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-solid fa-sliders" style="color: var(--primary);"></i> 會議分類 Profile</span>
+            <a href="javascript:void(0)" onclick="closeModal('schedule-bot-modal'); openUserSettingsModal('profiles')" style="font-size: 0.8rem; color: var(--primary); text-decoration: none; font-weight: 600;">
+              <i class="fa-solid fa-gear"></i> 管理範本
+            </a>
+          </label>
+          <select id="bot-profile-select" class="form-input">
+            <option value="">載入中...</option>
+          </select>
+        </div>
+<div class="form-group">
           <label class="form-label">Teams 會議連結 (URL)</label>
           <input type="url" id="bot-teams-url" class="form-input" placeholder="https://teams.microsoft.com/l/meetup-join/..." required>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem; line-height: 1.4;">
@@ -1311,11 +1345,93 @@
 
   <!-- 5. 使用者個人設定 Modal (自訂 API Key + 修改密碼) -->
   <div id="user-settings-modal" class="modal-overlay">
-    <div class="modal-box" style="max-width: 520px;">
+    <div class="modal-box" style="max-width: 680px;">
       <div class="modal-header">
         <h3 class="modal-title"><i class="fa-solid fa-user-gear"></i> 個人偏好與帳號設定</h3>
         <button class="close-btn" onclick="closeModal('user-settings-modal')">&times;</button>
       </div>
+      <!-- 設定分頁導覽 -->
+      <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.25rem;">
+        <button id="user-tab-btn-profiles" class="btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary); padding: 0.5rem 1rem;" onclick="switchUserTab('profiles')">
+          <i class="fa-solid fa-sliders"></i> 會議分類 Profile (提示詞範本)
+        </button>
+        <button id="user-tab-btn-security" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.5rem 1rem;" onclick="switchUserTab('security')">
+          <i class="fa-solid fa-key"></i> 個人 API Key & 密碼
+        </button>
+      </div>
+
+      <!-- 分頁 1: 會議分類 Profile 管理 -->
+      <div id="user-tab-profiles-view">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">會議情境與提示詞範本</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">設定常用與會者名單、專用名詞熱詞庫與摘要焦點，AI 轉譯時將優先精準對照</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="openProfileEditor()">
+            <i class="fa-solid fa-plus"></i> 新增會議分類
+          </button>
+        </div>
+
+        <!-- 編輯 / 新增 Profile 區塊 (預設隱藏) -->
+        <div id="profile-edit-box" style="display: none; background: #f8fafc; border: 1.5px solid var(--primary); border-radius: 8px; padding: 1.2rem; margin-bottom: 1.25rem; box-shadow: 0 4px 12px rgba(37,99,235,0.06);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+            <h4 id="profile-editor-title" style="font-size: 0.95rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.4rem;">
+              <i class="fa-solid fa-pen-to-square"></i> 新增會議分類
+            </h4>
+            <button type="button" class="btn btn-sm btn-outline" onclick="cancelProfileEditor()">取消</button>
+          </div>
+          <form onsubmit="handleSaveProfile(event)">
+            <input type="hidden" id="edit-profile-id" value="">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label" style="font-size: 0.82rem;">分類名稱 <span style="color: var(--danger);">*</span></label>
+              <input type="text" id="edit-profile-name" class="form-input" placeholder="例如：👔 主管會議 / 營運週會 或 🤝 客戶會議 (Ribbon)" required style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label" style="font-size: 0.82rem;">常用與會人員名單 (逗號分隔，用於說話人識別標註)</label>
+              <input type="text" id="edit-profile-speakers" class="form-input" placeholder="例如：Joel, Iris, Steven, Eric, 總經理" style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label" style="font-size: 0.82rem;">專有名詞與熱詞庫 (逗號分隔，AI 遇相近音將自動以此校正)</label>
+              <textarea id="edit-profile-keywords" class="form-input" rows="2" placeholder="例如：瑞祺, 澔楷, 8300, 8200, 5512, QBR, Cost Gap 15%, Little Fuse, PPV, ICT" style="padding: 0.45rem 0.75rem; font-size: 0.85rem; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.82rem;">開會背景 / 地點 (選填)</label>
+                <input type="text" id="edit-profile-location" class="form-input" placeholder="例如：台灣總部會議室 或 跨國視訊會議" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.82rem;">摘要著重點 (選填)</label>
+                <input type="text" id="edit-profile-hint" class="form-input" placeholder="例如：著重各部門決策方針、待辦事項與營運指標" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;">
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem;">
+              <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; cursor: pointer; color: #1e293b; user-select: none;">
+                <input type="checkbox" id="edit-profile-default">
+                <span><b>設為預設分類 (預設自動套用)</b></span>
+              </label>
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="cancelProfileEditor()">取消</button>
+                <button type="submit" class="btn btn-primary btn-sm">
+                  <i class="fa-solid fa-floppy-disk"></i> 儲存設定檔
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Profile 列表卡片區 -->
+        <div id="user-profiles-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 380px; overflow-y: auto; padding-right: 4px;">
+          <!-- JS 動態填入 -->
+        </div>
+      </div>
+
+      <!-- 分頁 2: 個人 API Key & 密碼 (原本的內容) -->
+      <div id="user-tab-security-view" style="display: none;">
+
 
       <!-- 分頁 / 區塊 1: 自訂 Google Gemini API Key -->
       <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.5rem;">
@@ -1490,6 +1606,9 @@
       taskStatus: (id) => `${BASE_PATH}/api/task_status?taskId=${id}`,
       userApiKey: `${BASE_PATH}/api/user/api_key`,
       changePassword: `${BASE_PATH}/api/user/change_password`,
+      profiles: `${BASE_PATH}/api/profiles`,
+      saveProfile: `${BASE_PATH}/api/profiles/save`,
+      deleteProfile: `${BASE_PATH}/api/profiles/delete`,
       botTasks: `${BASE_PATH}/api/bot/tasks`,
       botSchedule: `${BASE_PATH}/api/bot/schedule`,
       botStop: `${BASE_PATH}/api/bot/stop`,
@@ -1604,6 +1723,7 @@
         `;
       }
       await loadMeetings();
+      loadProfiles();
       await loadBotTasks();
     }
 
@@ -1813,6 +1933,7 @@
               window._taskPollTimer = setTimeout(() => {
                 window._taskPollTimer = null;
                 loadMeetings();
+      loadProfiles();
               }, 4000);
             }
           } else if (window._taskPollTimer) {
@@ -2087,6 +2208,7 @@
             if (prev && prev.status === 'transcribing' && t.status === 'completed') {
               showToast(`🎉 Teams 會議【${t.title}】已完成語音轉錄與摘要！`, 'success');
               loadMeetings();
+      loadProfiles();
             }
           });
 
@@ -2241,6 +2363,7 @@
           showToast(data.message || '已發送結束指令', 'info');
           await loadBotTasks();
           await loadMeetings();
+      loadProfiles();
         } else {
           showToast(data.message || '操作失敗', 'error');
         }
@@ -2621,6 +2744,7 @@
         if (data.status === 'ok') {
           showToast('會議記錄已刪除並安全備份至 ToBeDelete 目錄', 'success');
           await loadMeetings();
+      loadProfiles();
         } else {
           showToast(data.message || '刪除失敗', 'error');
         }
@@ -2663,6 +2787,15 @@
         xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
         xhr.setRequestHeader('X-Meeting-Title', encodeURIComponent(title));
 
+        const profId = document.getElementById('upload-profile-select')?.value;
+        if (profId && profId !== '__manage__') {
+          xhr.setRequestHeader('X-Profile-Id', profId);
+        }
+        const customPrompt = document.getElementById('upload-custom-prompt')?.value?.trim();
+        if (customPrompt) {
+          xhr.setRequestHeader('X-Custom-Prompt', encodeURIComponent(customPrompt));
+        }
+
         xhr.upload.onprogress = (evt) => {
           if (evt.lengthComputable) {
             const percent = Math.round((evt.loaded / evt.total) * 60);
@@ -2682,6 +2815,7 @@
                 closeModal('upload-modal');
                 resetUploadForm();
                 loadMeetings();
+      loadProfiles();
               }, 600);
             } else {
               showToast(resp.message || '上傳失敗', 'error');
@@ -2716,6 +2850,7 @@
         console.error(e);
       }
       loadMeetings();
+      loadProfiles();
     }
 
     function pollTranscribeTask(taskId) {
@@ -2736,6 +2871,7 @@
               closeModal('upload-modal');
               resetUploadForm();
               loadMeetings();
+      loadProfiles();
             }, 1000);
           } else if (data.status === 'error') {
             clearInterval(interval);
@@ -2885,7 +3021,8 @@
     }
 
     // ====== 使用者個人設定 (自訂 API Key) ======
-    function openUserSettingsModal() {
+    function openUserSettingsModal(defaultTab = 'profiles') {
+      switchUserTab(defaultTab);
       if (!currentUser) return;
       const input = document.getElementById('user-api-key-input');
       const badge = document.getElementById('user-key-status-badge');

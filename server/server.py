@@ -205,6 +205,19 @@ def handle_recordv2_get(handler):
         return True
 
     # 3. 取得會議列表 (限登入者)
+        # 會議分類 Profile 列表
+    if clean_path == "/api/profiles":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            profiles = database.get_user_profiles(user["id"])
+            send_json(handler, 200, {"status": "ok", "profiles": profiles})
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
     if clean_path == "/api/meetings":
         user = get_auth_user(handler.headers)
         if not user:
@@ -604,6 +617,13 @@ def handle_recordv2_post(handler):
             if join_now or not scheduled_at:
                 scheduled_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+            profile_id = body.get("profile_id")
+            if profile_id:
+                try:
+                    profile_id = int(profile_id)
+                except Exception:
+                    profile_id = None
+
             task = database.create_bot_task(
                 user_id=user["id"],
                 title=title,
@@ -611,7 +631,8 @@ def handle_recordv2_post(handler):
                 scheduled_at=scheduled_at,
                 max_duration_min=max_duration,
                 bot_name=bot_name,
-                notify_email=notify_email
+                notify_email=notify_email,
+                profile_id=profile_id
             )
 
             if join_now:
@@ -671,6 +692,63 @@ def handle_recordv2_post(handler):
         send_json(handler, 200, {"status": "ok"})
         return True
 
+        # 會議分類 Profile 儲存與刪除
+    if clean_path == "/api/profiles/save":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            body = read_json_body(handler)
+            pid = body.get("id")
+            if pid:
+                try:
+                    pid = int(pid)
+                except Exception:
+                    pid = None
+            name = body.get("name", "").strip()
+            speakers = body.get("speakers", "").strip()
+            keywords = body.get("keywords", "").strip()
+            loc = body.get("location_context", "").strip()
+            hint = body.get("prompt_hint", "").strip()
+            is_def = bool(body.get("is_default", False))
+
+            target_id = database.save_user_profile(
+                user["id"], pid, name, speakers, keywords, loc, hint, is_def
+            )
+            profiles = database.get_user_profiles(user["id"])
+            send_json(handler, 200, {
+                "status": "ok",
+                "profileId": target_id,
+                "profiles": profiles,
+                "message": "會議分類設定已儲存！"
+            })
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
+    if clean_path == "/api/profiles/delete":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            body = read_json_body(handler)
+            pid = body.get("id")
+            if not pid:
+                send_json(handler, 400, {"status": "error", "message": "缺少 profile id"})
+                return True
+            database.delete_user_profile(user["id"], int(pid))
+            profiles = database.get_user_profiles(user["id"])
+            send_json(handler, 200, {
+                "status": "ok",
+                "profiles": profiles,
+                "message": "會議分類已刪除"
+            })
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
     if clean_path == "/api/upload":
         user = get_auth_user(handler.headers)
         if not user:
@@ -682,6 +760,10 @@ def handle_recordv2_post(handler):
             filename = urllib.parse.unquote(raw_filename)
             raw_title = handler.headers.get("X-Meeting-Title") or params.get("title", [""])[0]
             user_title = urllib.parse.unquote(raw_title)
+            raw_profile_id = handler.headers.get("X-Profile-Id") or params.get("profile_id", [""])[0]
+            profile_id = int(raw_profile_id) if raw_profile_id and raw_profile_id.isdigit() else None
+            raw_custom_prompt = handler.headers.get("X-Custom-Prompt") or params.get("custom_prompt", [""])[0]
+            custom_prompt = urllib.parse.unquote(raw_custom_prompt) if raw_custom_prompt else ""
 
             content_len = int(handler.headers.get("Content-Length", 0))
             if content_len <= 0:
@@ -724,7 +806,7 @@ def handle_recordv2_post(handler):
 
             threading.Thread(
                 target=ai_transcriber.transcribe_audio_task,
-                args=(task_id, audio_dst, user["id"], user_title, TASKS),
+                args=(task_id, audio_dst, user["id"], user_title, TASKS, profile_id, custom_prompt),
                 daemon=True
             ).start()
 

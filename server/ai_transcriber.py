@@ -126,7 +126,7 @@ def call_gemini_api(api_key, payload, candidate_models=None, timeout=180):
 
     raise RuntimeError(f"Gemini API 請求失敗：\n{last_err}")
 
-def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dict=None):
+def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dict=None, profile_id=None, custom_prompt=""):
     if tasks_dict is None:
         tasks_dict = {}
 
@@ -143,6 +143,38 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
         tasks_dict[task_id]["progress"] = 15
         tasks_dict[task_id]["message"] = f"已調度金鑰 ({key_source})，正在偵測音訊規格與時長..."
 
+        # 載入並套用會議分類 Profile 與提示詞
+        profile = None
+        if profile_id:
+            try:
+                profile = database.get_profile_by_id(int(profile_id), user_id)
+            except Exception:
+                profile = None
+        if not profile:
+            profile = database.get_default_profile_for_user(user_id)
+
+        profile_name = profile["name"] if profile else ""
+        profile_id_val = profile["id"] if profile else None
+
+        profile_instructions = []
+        if profile:
+            if profile.get("name"):
+                profile_instructions.append(f"【會議分類情境】：{profile['name']}")
+            if profile.get("location_context"):
+                profile_instructions.append(f"【開會背景/環境】：{profile['location_context']}")
+            if profile.get("speakers"):
+                profile_instructions.append(f"【已知與會人員名單】：{profile['speakers']}（請特別對照此名單進行說話人識別 Speaker Diarization，若辨識到相應說話者請直接標記真實姓名）")
+            if profile.get("keywords"):
+                profile_instructions.append(f"【專有名詞與熱詞庫】：{profile['keywords']}（音訊中若有發音相近、同音異字或模糊詞彙，請務必以此詞庫進行專業校正）")
+            if profile.get("prompt_hint"):
+                profile_instructions.append(f"【特殊轉譯與摘要指示】：{profile['prompt_hint']}")
+        if custom_prompt and custom_prompt.strip():
+            profile_instructions.append(f"【本次會議補充關鍵字/說明】：{custom_prompt.strip()}")
+
+        profile_prompt_block = "\n".join(profile_instructions)
+        if profile_name:
+            print(f"[AI Transcriber] 套用會議 Profile: {profile_name} (ID: {profile_id_val})", flush=True)
+
         file_size = os.path.getsize(audio_path)
         audio_dur_sec = get_audio_duration(audio_path)
         print(f"[AI Transcriber] 音訊檔案大小: {file_size // 1024} KB, 偵測時長: {audio_dur_sec} 秒 ({format_timestamp(audio_dur_sec)})", flush=True)
@@ -151,12 +183,12 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
         if audio_dur_sec > CHUNK_DURATION_SEC:
             print(f"[AI Transcriber] 音訊超過 30 分鐘 ({audio_dur_sec}s > {CHUNK_DURATION_SEC}s)，啟動 30 分鐘自動切片流水線！", flush=True)
             summary_text, transcript_text, max_sec = transcribe_chunked_30m(
-                task_id, audio_path, audio_dur_sec, api_key, key_source, tasks_dict
+                task_id, audio_path, audio_dur_sec, api_key, key_source, tasks_dict, profile_prompt_block=profile_prompt_block
             )
         else:
             print(f"[AI Transcriber] 音訊未滿 30 分鐘，採用快速單次轉錄模式", flush=True)
             summary_text, transcript_text, max_sec = transcribe_single_pass(
-                task_id, audio_path, file_size, api_key, key_source, tasks_dict
+                task_id, audio_path, file_size, api_key, key_source, tasks_dict, profile_prompt_block=profile_prompt_block
             )
 
         # 儲存摘要與逐字稿至同資料夾
@@ -227,7 +259,9 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
             "summary_file": os.path.basename(summary_file),
             "transcript_file": os.path.basename(transcript_file),
             "speakers": sorted(list(speakers)),
-            "dialogue_count": dialogue_count
+            "dialogue_count": dialogue_count,
+            "profile_id": profile_id_val,
+            "profile_name": profile_name
         }
 
         database.save_meeting_record(meeting_record)
@@ -243,7 +277,7 @@ def transcribe_audio_task(task_id, audio_path, user_id, user_title="", tasks_dic
         tasks_dict[task_id]["message"] = f"轉錄失敗: {e}"
         print(f"[AI Transcriber] Task {task_id} 執行失敗: {e}", flush=True)
 
-def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, tasks_dict):
+def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, tasks_dict, profile_prompt_block=""): 
     """
     30 分鐘自動切片轉錄流水線：
     1. 將超長音訊依 30 分鐘（1800 秒）切成小於 15MB 之切片
@@ -304,7 +338,11 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
 1. 格式：[MM:SS] [說話者]: 對話內容
 2. 時間軸 [MM:SS] 請標註相對於本切片開頭的時間。
 3. 必須進行人物聲音識別 (Speaker Diarization)，明確區分說話者（例如：[說話者 A]、[說話者 B]，若對話中有提及姓名如 [Iris]、[Adam]、[Steven] 請直接標註姓名）。
-{speaker_hint}4. 忠實保留說話者原文，切勿翻譯，切勿重複產生內容。
+{speaker_hint}
+【會議設定檔與熱詞參考】：
+{profile_prompt_block}
+
+4. 忠實保留說話者原文，切勿翻譯，切勿重複產生內容。
 5. 只輸出逐字稿內容，不要包含開頭或結尾贅詞。
 """
 
@@ -384,7 +422,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
         except Exception:
             pass
 
-def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, tasks_dict):
+def transcribe_single_pass(task_id, audio_path, file_size, api_key, key_source, tasks_dict, profile_prompt_block=""): 
     """30 分鐘以內短音訊，走快速單次全檔轉錄"""
     ext = os.path.splitext(audio_path)[1].lower()
     mime_types = {
