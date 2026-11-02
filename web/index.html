@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>智匯會議錄音與 AI 雲端轉譯系統</title>
+  <title>Hawkeye 智匯會議錄音與 AI 轉譯平台 v2.0</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -776,23 +776,30 @@
       <div class="brand" onclick="navigateHome()">
         <div class="brand-logo"><i class="fa-solid fa-headset"></i></div>
         <div>
-          <span class="brand-title">智匯會議 AI</span>
+          <span class="brand-title">Hawkeye Meeting AI</span>
           <span class="brand-badge">v2.0</span>
         </div>
       </div>
 
       <div class="nav-actions">
         <!-- 未登入按鈕群 -->
-                <div id="unauth-nav" style="display: flex; gap: 0.75rem;">
-          <button class="btn btn-primary" onclick="openModal('login-modal')" style="display: inline-flex; align-items: center; gap: 0.5rem;">
-            <i class="fa-brands fa-google"></i> 登入 / 註冊
+        <div id="unauth-nav" style="display: flex; gap: 0.75rem;">
+          <button class="btn btn-outline" onclick="openModal('login-modal')">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> 登入
+          </button>
+          <button class="btn btn-primary" onclick="openModal('register-modal')">
+            <i class="fa-solid fa-user-plus"></i> 註冊帳號
           </button>
         </div>
+
         <!-- 已登入使用者資訊群 -->
         <div id="auth-nav" style="display: none; align-items: center; gap: 0.75rem;">
           <button class="btn btn-outline" onclick="navigateDashboard()">
             <i class="fa-solid fa-table-cells-large"></i> 我的會議
           </button>
+          <a href="會議錄音上傳器.exe" class="btn btn-outline" download title="下載 Windows 會議錄音器">
+            <i class="fa-solid fa-download"></i> 下載應用程式
+          </a>
           <button class="btn btn-outline" onclick="openUserSettingsModal()" title="個人 API Key 與設定">
             <i class="fa-solid fa-key"></i> 個人設定
           </button>
@@ -827,17 +834,19 @@
         <p class="hero-desc">
           專為實體會議及各類線上會議 (Teams / Zoom / Google Meet / Webex) 打造的次世代會議記錄工具。一鍵錄製系統揚聲器與麥克風無損音訊，雲端自動進行說話者識別、重點會議總結與時間軸秒級回放。
         </p>
-                <div class="hero-cta">
-          <a href="/api/download/client-installer" class="btn btn-primary" download="會議錄音_安裝檔.exe" style="gap: 0.5rem;">
-            <i class="fa-solid fa-download"></i> 下載 Windows 安裝版 (推薦)
+        <div class="hero-cta">
+          <a href="會議錄音上傳器.exe" class="btn btn-primary" download>
+            <i class="fa-solid fa-download"></i> 下載 Windows 會議錄音器 (EXE)
           </a>
-          <a href="/api/download/client-exe" class="btn btn-outline" download="會議錄音.exe" style="gap: 0.5rem;">
-            <i class="fa-brands fa-windows"></i> 免安裝單檔 (.exe)
-          </a>
-          <button class="btn btn-ghost" onclick="loginWithGoogle()" style="gap: 0.5rem; color: #1e293b; background: rgba(255,255,255,0.8); border: 1px solid #cbd5e1;">
-            <i class="fa-brands fa-google" style="color: #ea4335;"></i> 以 Google 帳號快速登入
+          <button class="btn btn-outline" onclick="openModal('register-modal')">
+            <i class="fa-solid fa-user-plus"></i> 免費註冊 (@hawkeyetech.com.tw)
+          </button>
+          <button class="btn btn-ghost" onclick="openModal('login-modal')">
+            已有帳號？登入
           </button>
         </div>
+      </div>
+
       <!-- 特色功能卡片 -->
       <div class="features-grid">
         <div class="feature-card">
@@ -858,7 +867,7 @@
         <div class="feature-card">
           <div class="feature-icon"><i class="fa-solid fa-building-shield"></i></div>
           <h3>企業級帳號隔離與權限</h3>
-          <p>採用 Google 帳號登入認證，自動建立專屬雲端會議庫，安全可靠。</p>
+          <p>嚴格限定 @hawkeyetech.com.tw 信箱啟用驗證。每位同仁獨立專屬資料夾與會議紀錄，具備 Admin 帳號管理能力。</p>
         </div>
       </div>
 
@@ -868,12 +877,9 @@
           <h3>輕量化 Windows 會議錄音客戶端 (錄音器 v2.0)</h3>
           <p>純錄音無負擔架構：會議錄音結束後，一鍵直接上傳到本伺服器進行 AI 轉錄與摘要生成，電腦不發燙、不佔 CPU！</p>
         </div>
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-          <a href="/api/download/client-installer" class="btn btn-primary" style="padding: 0.85rem 1.6rem; font-size: 1rem;" download="會議錄音_安裝檔.exe">
-            <i class="fa-solid fa-download"></i> 下載安裝版 (推薦)
-          </a>
-          <a href="/api/download/client-exe" class="btn btn-outline" style="padding: 0.85rem 1.4rem; font-size: 1rem;" download="會議錄音.exe">
-            <i class="fa-brands fa-windows"></i> 免安裝單檔 (.exe)
+        <div>
+          <a href="會議錄音上傳器.exe" class="btn btn-primary" style="padding: 0.85rem 1.6rem; font-size: 1rem;" download>
+            <i class="fa-brands fa-windows"></i> 下載最新 EXE
           </a>
         </div>
       </div>
@@ -886,14 +892,11 @@
           <h2>我的會議記錄</h2>
           <p>查看雲端 AI 處理完成的所有會議、逐字稿與決策摘要</p>
         </div>
-        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-          <a href="/api/download/client-installer" class="btn btn-primary" download="會議錄音_安裝檔.exe" style="display: inline-flex; align-items: center; gap: 0.45rem;">
-            <i class="fa-solid fa-download"></i> 下載安裝版 (.exe)
-          </a>
-          <a href="/api/download/client-exe" class="btn btn-outline" download="會議錄音.exe" style="display: inline-flex; align-items: center; gap: 0.45rem;">
-            <i class="fa-brands fa-windows"></i> 免安裝版 (.exe)
-          </a>
-          <button class="btn btn-outline" onclick="openModal('upload-modal')" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="openScheduleBotModal()">
+            <i class="fa-solid fa-robot"></i> 預約 Teams AI 撥入錄音
+          </button>
+          <button class="btn btn-outline" onclick="openModal('upload-modal')">
             <i class="fa-solid fa-cloud-arrow-up"></i> 上傳音檔轉錄
           </button>
         </div>
@@ -930,6 +933,21 @@
         </div>
       </div>
 
+      <!-- Teams Bot 預約排程與即時撥入狀態面板 -->
+      <div id="bot-tasks-container" style="display: none; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-robot" style="color: var(--primary);"></i> Teams AI 自動撥入與排程狀態
+          </h3>
+          <button class="btn btn-ghost btn-sm" onclick="loadBotTasks()" title="重新整理任務">
+            <i class="fa-solid fa-rotate"></i> 重新整理
+          </button>
+        </div>
+        <div id="bot-tasks-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
+          <!-- Bot 任務卡片由 JS 動態渲染 -->
+        </div>
+      </div>
+
       <!-- 會議清單網格 -->
       <div id="meetings-list" class="meetings-grid">
         <!-- 會議卡片由 JS 動態填入 -->
@@ -952,8 +970,11 @@
           <button id="btn-detail-share" class="btn btn-primary" onclick="openShareModal(currentMeetingData ? currentMeetingData.id : null)" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" title="分享此會議連結">
             <i class="fa-solid fa-share-nodes"></i> 分享會議
           </button>
-          <button class="btn btn-outline" onclick="copySummaryText()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;">
+          <button class="btn btn-outline" onclick="copySummaryText()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem;" title="複製重點摘要">
             <i class="fa-regular fa-copy"></i> 複製摘要
+          </button>
+          <button class="btn btn-outline" onclick="downloadTranscript()" style="padding: 0.45rem 0.85rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="下載整場會議逐字稿文字檔 (.txt)">
+            <i class="fa-solid fa-file-arrow-down"></i> 下載逐字稿
           </button>
         </div>
       </div>
@@ -1004,6 +1025,9 @@
           <div style="display: flex; gap: 0.75rem; align-items: center;">
             <input type="text" id="transcript-search" class="search-input" placeholder="搜尋關鍵字或說話者..." oninput="filterTranscript()">
             <span id="transcript-count" style="font-size: 0.85rem; color: var(--text-muted);">共 0 句</span>
+            <button class="btn btn-outline btn-sm" onclick="downloadTranscript()" style="padding: 4px 10px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="下載整場會議逐字稿文字檔 (.txt)">
+              <i class="fa-solid fa-file-arrow-down"></i> 下載
+            </button>
           </div>
         </div>
 
@@ -1017,45 +1041,54 @@
 
   <!-- ====== 模態框 MODALS ====== -->
 
-  <!-- 1. 登入 Modal (Google 快速認證 + 管理員應急入口) -->
+  <!-- 1. 登入 Modal -->
   <div id="login-modal" class="modal-overlay">
-    <div class="modal-box" style="max-width: 440px;">
+    <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title"><i class="fa-solid fa-arrow-right-to-bracket"></i> 登入系統</h3>
+        <h3 class="modal-title">登入 Hawkeye 會議系統</h3>
         <button class="close-btn" onclick="closeModal('login-modal')">&times;</button>
       </div>
-      <div style="padding: 0.5rem 0 1.25rem 0; text-align: center;">
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
-          點擊下方按鈕即可使用您的 Google / Gmail 帳號一鍵登入，自動建立專屬會議空間。
-        </p>
-
-        <button type="button" onclick="loginWithGoogle()" style="width: 100%; justify-content: center; padding: 12px 16px; font-size: 1rem; font-weight: 600; background: #ffffff; color: #1f2937; border: 1.5px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-          <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-          使用 Google 帳號登入
-        </button>
-
-        <div style="margin: 1.5rem 0 1rem 0; display: flex; align-items: center; text-align: center; color: #94a3b8; font-size: 0.82rem;">
-          <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
-          <span style="padding: 0 10px; cursor: pointer;" onclick="toggleAdminLoginForm()">
-            <i class="fa-solid fa-lock"></i> 管理員本地密碼登入 (點此展開)
-          </span>
-          <div style="flex: 1; border-bottom: 1px solid #e2e8f0;"></div>
+      <form onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">企業信箱 (Email)</label>
+          <input type="email" id="login-email" class="form-input" placeholder="username@hawkeyetech.com.tw" required>
         </div>
+        <div class="form-group">
+          <label class="form-label">密碼</label>
+          <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+          立即登入
+        </button>
+      </form>
+    </div>
+  </div>
 
-        <form id="admin-login-form" onsubmit="handleLogin(event)" style="display: none; text-align: left; margin-top: 1rem;">
-          <div class="form-group">
-            <label class="form-label">管理員帳號 (Email)</label>
-            <input type="text" id="login-email" class="form-input" placeholder="admin@local 或指定信箱">
-          </div>
-          <div class="form-group">
-            <label class="form-label">管理員密碼</label>
-            <input type="password" id="login-password" class="form-input" placeholder="••••••••">
-          </div>
-          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
-            以管理員密碼登入
-          </button>
-        </form>
+  <!-- 2. 註冊 Modal -->
+  <div id="register-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">註冊新帳號</h3>
+        <button class="close-btn" onclick="closeModal('register-modal')">&times;</button>
       </div>
+      <form onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label class="form-label">同仁姓名 / 稱呼</label>
+          <input type="text" id="reg-name" class="form-input" placeholder="例如：王小明" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">企業信箱 (限 @hawkeyetech.com.tw)</label>
+          <input type="email" id="reg-email" class="form-input" placeholder="your_name@hawkeyetech.com.tw" required>
+          <div class="form-help">系統僅接受 @hawkeyetech.com.tw 網域之電子郵件。</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">設定密碼 (至少 6 碼)</label>
+          <input type="password" id="reg-password" class="form-input" minlength="6" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+          發送註冊驗證信
+        </button>
+      </form>
     </div>
   </div>
 
@@ -1086,6 +1119,80 @@
     </div>
   </div>
 
+  <!-- 3.1 預約 Teams AI 撥入錄音 Modal -->
+  <div id="schedule-bot-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fa-solid fa-robot" style="color: var(--primary);"></i> 預約 Teams AI 撥入錄音
+        </h3>
+        <button class="close-btn" onclick="closeModal('schedule-bot-modal')">&times;</button>
+      </div>
+      <form onsubmit="handleScheduleBotSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">會議主題或名稱</label>
+          <input type="text" id="bot-meeting-title" class="form-input" placeholder="例如: 產品架構同步與進度會議" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Teams 會議連結 (URL)</label>
+          <input type="url" id="bot-teams-url" class="form-input" placeholder="https://teams.microsoft.com/l/meetup-join/..." required>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem; line-height: 1.4;">
+            <i class="fa-solid fa-circle-info"></i> 支援標準 Teams 會議邀請連結。AI 助理將於指定時間以訪客身分匿名入會錄音。
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">撥入時機方式</label>
+          <div style="display: flex; gap: 1.25rem; margin-top: 0.4rem; padding: 0.5rem 0.75rem; background: #f8fafc; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <label style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.9rem;">
+              <input type="radio" name="bot-timing-mode" value="schedule" checked onchange="toggleTimingMode('schedule')">
+              <span><b>📅 預約時間撥入</b></span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.9rem;">
+              <input type="radio" name="bot-timing-mode" value="now" onchange="toggleTimingMode('now')">
+              <span><b>⚡ 立即撥入</b> (馬上加入)</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="bot-schedule-time-row" class="form-group">
+          <label class="form-label">預定自動撥入時間</label>
+          <input type="datetime-local" id="bot-scheduled-time" class="form-input">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <div class="form-group">
+            <label class="form-label">最長錄音時限</label>
+            <select id="bot-max-duration" class="form-input">
+              <option value="30">30 分鐘</option>
+              <option value="60" selected>60 分鐘 (預設)</option>
+              <option value="90">90 分鐘</option>
+              <option value="120">120 分鐘 (2 小時)</option>
+              <option value="180">180 分鐘 (3 小時)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">AI 助理顯示暱稱</label>
+            <input type="text" id="bot-display-name" class="form-input" value="AI 會議記錄助理 (Hawkeye AI)">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">會後會議紀錄發送 Email (選填)</label>
+          <input type="email" id="bot-notify-email" class="form-input" placeholder="例如: joel@hawkeyetech.com.tw (會議結束自動將摘要寄送給您)">
+        </div>
+
+        <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-outline" onclick="closeModal('schedule-bot-modal')">取消</button>
+          <button type="submit" id="btn-submit-schedule-bot" class="btn btn-primary">
+            <i class="fa-solid fa-calendar-check"></i> 確認建立預約排程
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 4. Admin 系統管理 Modal (使用者管理 + Key Pool 資源池管理) -->
   <div id="admin-modal" class="modal-overlay">
     <div class="modal-box admin-modal-box">
@@ -1095,22 +1202,19 @@
       </div>
 
       <!-- 分頁標籤 -->
-            <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.25rem; flex-wrap: wrap;">
-        <button id="admin-tab-btn-users" class="btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('users')">
+      <div style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.25rem;">
+        <button id="admin-tab-btn-users" class="btn" style="background: transparent; border: none; border-bottom: 3px solid var(--primary); border-radius: 0; font-weight: 700; color: var(--primary);" onclick="switchAdminTab('users')">
           <i class="fa-solid fa-users"></i> 使用者帳號管理
         </button>
-        <button id="admin-tab-btn-keys" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('keys')">
-          <i class="fa-solid fa-key"></i> Key Pool 金鑰資源池
+        <button id="admin-tab-btn-keys" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted);" onclick="switchAdminTab('keys')">
+          <i class="fa-solid fa-server"></i> API Key 資源池動態平衡 (Key Pool)
         </button>
-        <button id="admin-tab-btn-oauth" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('oauth')">
-          <i class="fa-solid fa-sliders"></i> 系統與 OAuth 設定 / 修改密碼
-        </button>
-        <button id="admin-tab-btn-logs" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted); padding: 0.6rem 0.85rem;" onclick="switchAdminTab('logs')">
-          <i class="fa-solid fa-terminal"></i> 伺服器 Log
+        <button id="admin-tab-btn-logs" class="btn" style="background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; font-weight: 600; color: var(--text-muted);" onclick="switchAdminTab('logs')">
+          <i class="fa-solid fa-terminal"></i> 伺服器即時 Log
         </button>
       </div>
 
-      <!-- 1: 使用者帳號管理 -->
+      <!-- 標籤頁 1: 使用者帳號管理 -->
       <div id="admin-tab-users-view">
         <div style="overflow-x: auto;">
           <table class="admin-table">
@@ -1147,7 +1251,7 @@
         <form onsubmit="handleAddSystemKey(event)" style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end;">
           <div style="flex: 2; min-width: 220px;">
             <label class="form-label" style="font-size: 0.8rem;">Google Gemini API Key</label>
-            <input type="text" id="new-key-val" class="form-input" placeholder="例如：AIzaSy..." required style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
+            <input type="text" id="new-key-val" class="form-input" placeholder="例如：AQ.Ab8RN6Kg..." required style="padding: 0.45rem 0.75rem; font-size: 0.88rem;">
           </div>
           <div style="flex: 1; min-width: 140px;">
             <label class="form-label" style="font-size: 0.8rem;">備註標籤 (例如：團隊 Key 2)</label>
@@ -1182,64 +1286,6 @@
       </div>
 
       <!-- 標籤頁 3: 伺服器即時 Log -->
-      
-      <!-- 分頁 3: 系統與 Google OAuth 設定 + 管理員密碼修改 -->
-      <div id="admin-tab-oauth-view" style="display: none;">
-        <!-- 區塊 1: Google OAuth 設定 -->
-        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.25rem;">
-          <h4 style="font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-            <i class="fa-brands fa-google" style="color: #ea4335;"></i> Google OAuth 2.0 登入設定
-          </h4>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.55;">
-            配置 Google OAuth Client ID 與 Secret 後，首頁及客戶端即可啟用「使用 Google 帳號登入」。<br>
-            提示：在 Google Cloud Console 的<b>「已授權的重新導向 URI (Authorized redirect URIs)」</b>請設定為：<br>
-            <code id="admin-redirect-uri-display" style="background: #f1f5f9; padding: 3px 8px; border-radius: 4px; color: #2563eb; font-weight: 600; font-family: monospace; display: inline-block; margin-top: 4px;">http://172.16.1.21:8088/api/auth/google/callback</code>
-          </p>
-          <div class="form-group" style="margin-bottom: 0.85rem;">
-            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">伺服器對外公開網址 (PUBLIC_URL)</label>
-            <input type="text" id="admin-cfg-public-url" class="form-input" placeholder="例如: http://172.16.1.21:8088">
-          </div>
-          <div class="form-group" style="margin-bottom: 0.85rem;">
-            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Google Client ID</label>
-            <input type="text" id="admin-cfg-google-id" class="form-input" placeholder="例如: xxxxxx.apps.googleusercontent.com">
-          </div>
-          <div class="form-group" style="margin-bottom: 1rem;">
-            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Google Client Secret</label>
-            <input type="password" id="admin-cfg-google-secret" class="form-input" placeholder="輸入用戶端密鑰">
-          </div>
-          <button class="btn btn-primary" onclick="saveAdminSettings()" style="display: inline-flex; align-items: center; gap: 0.4rem;">
-            <i class="fa-solid fa-floppy-disk"></i> 儲存系統設定
-          </button>
-        </div>
-
-        <!-- 區塊 2: 修改管理員密碼 -->
-        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
-          <h4 style="font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-            <i class="fa-solid fa-shield-halved" style="color: #f59e0b;"></i> 修改管理員登入密碼 (Admin Password)
-          </h4>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-            修改目前管理員帳號之本地登入密碼，修改後立即生效。
-          </p>
-          <form onsubmit="handleAdminChangePassword(event)">
-            <div class="form-group" style="margin-bottom: 0.85rem;">
-              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">目前管理員密碼</label>
-              <input type="password" id="admin-curr-pwd" class="form-input" placeholder="預設為 admin888" required>
-            </div>
-            <div class="form-group" style="margin-bottom: 0.85rem;">
-              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">設定新密碼 (至少 4 位)</label>
-              <input type="password" id="admin-new-pwd" class="form-input" placeholder="輸入新密碼" minlength="4" required>
-            </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">確認新密碼</label>
-              <input type="password" id="admin-confirm-pwd" class="form-input" placeholder="再次輸入新密碼" minlength="4" required>
-            </div>
-            <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 0.4rem;">
-              <i class="fa-solid fa-check"></i> 更新管理員密碼
-            </button>
-          </form>
-        </div>
-      </div>
-
       <div id="admin-tab-logs-view" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
           <div style="font-size: 0.85rem; color: var(--text-muted);">
@@ -1258,30 +1304,8 @@
           </div>
         </div>
         <pre id="admin-logs-content" style="background: #090d16; color: #38bdf8; padding: 1.15rem; border-radius: 8px; font-family: Consolas, monospace; font-size: 0.82rem; line-height: 1.5; height: 380px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; border: 1px solid #1e293b; box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);">載入中...</pre>
-      
-        <!-- TAB 3: 系統與 OAuth 設定 -->
-        <div id="admin-tab-settings" class="admin-tab-content" style="display: none; padding: 1rem 0;">
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
-            <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #1e293b;"><i class="fa-brands fa-google" style="color: #ea4335;"></i> Google OAuth 2.0 登入設定</h4>
-            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">
-              使用者點擊「使用 Google 帳號登入」時所需之 Client ID 與 Client Secret。亦可於 Docker 啟動時透過環境變數 <code>GOOGLE_CLIENT_ID</code>、<code>GOOGLE_CLIENT_SECRET</code>、<code>PUBLIC_URL</code> 傳入。
-            </p>
-            <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label">伺服器外部對外網址 (PUBLIC_URL)</label>
-              <input type="text" id="admin-cfg-public-url" class="form-input" placeholder="例如: https://meeting.example.com">
-            </div>
-            <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label">Google Client ID</label>
-              <input type="text" id="admin-cfg-google-id" class="form-input" placeholder="xxxxxx.apps.googleusercontent.com">
-            </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">Google Client Secret</label>
-              <input type="password" id="admin-cfg-google-secret" class="form-input" placeholder="••••••••••••••••">
-            </div>
-            <button class="btn btn-primary" onclick="saveAdminSettings()">儲存系統設定</button>
-          </div>
-        </div>
       </div>
+
     </div>
   </div>
 
@@ -1336,8 +1360,7 @@
       </div>
 
       <!-- 區塊 2: 變更登入密碼 -->
-      <!-- 區塊 2: 變更登入密碼 / 認證狀態 -->
-      <div id="user-password-section" style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+      <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
         <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
           <i class="fa-solid fa-lock" style="color: var(--primary);"></i> 修改登入密碼
         </h4>
@@ -1386,7 +1409,7 @@
     </div>
   </div>
 
-  <!-- 7. 分享會議連結 Modal (唯讀分享) -->
+  <!-- 7. 分享會議連結 Modal (唯讀分享與自動失效) -->
   <div id="share-modal" class="modal-overlay">
     <div class="modal-box" style="max-width: 520px;">
       <div class="modal-header">
@@ -1452,42 +1475,6 @@
     // ====== API 路徑自動適配 (/recordv2/api 或 /api) ======
     const BASE_PATH = window.location.pathname.startsWith('/recordv2') ? '/recordv2' : '';
     const API_BASE = BASE_PATH;
-
-    let serverConfig = { public_url: '', has_google_auth: false, key_pool_count: 0 };
-
-    function toggleAdminLoginForm() {
-      const f = document.getElementById('admin-login-form');
-      f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
-    }
-
-    function loginWithGoogle() {
-      window.location.href = `${BASE_PATH}/api/auth/google/login`;
-    }
-
-    async function fetchServerConfig() {
-      try {
-        const res = await fetch(`${BASE_PATH}/api/config`);
-        const data = await res.json();
-        if (data.status === 'ok') {
-          serverConfig = data;
-          checkKeyPoolAlert();
-        }
-      } catch (e) {
-        console.error("fetchServerConfig failed:", e);
-      }
-    }
-
-    function checkKeyPoolAlert() {
-      const dashAlert = document.getElementById('key-pool-empty-alert');
-      if (dashAlert) {
-        if (serverConfig.key_pool_count === 0 && currentUser && currentUser.role === 'admin') {
-          dashAlert.style.display = 'block';
-        } else {
-          dashAlert.style.display = 'none';
-        }
-      }
-    }
-
     const API = {
       me: `${BASE_PATH}/api/auth/me`,
       login: `${BASE_PATH}/api/auth/login`,
@@ -1503,6 +1490,10 @@
       taskStatus: (id) => `${BASE_PATH}/api/task_status?taskId=${id}`,
       userApiKey: `${BASE_PATH}/api/user/api_key`,
       changePassword: `${BASE_PATH}/api/user/change_password`,
+      botTasks: `${BASE_PATH}/api/bot/tasks`,
+      botSchedule: `${BASE_PATH}/api/bot/schedule`,
+      botStop: `${BASE_PATH}/api/bot/stop`,
+      botDelete: `${BASE_PATH}/api/bot/delete`,
       adminUsers: `${BASE_PATH}/api/admin/users`,
       adminToggleActive: `${BASE_PATH}/api/admin/users/toggle_active`,
       adminVerify: `${BASE_PATH}/api/admin/users/verify`,
@@ -1537,28 +1528,15 @@
       const urlParams = new URLSearchParams(window.location.search);
       const shareTokenFromUrl = urlParams.get('share');
       if (shareTokenFromUrl) {
-        await fetchServerConfig();
         await loadSharedMeeting(shareTokenFromUrl);
         audioElem.addEventListener('timeupdate', onAudioTimeUpdate);
         return;
       }
 
-      // 1. 檢查網址是否有 Google OAuth 跳轉返回的 token 或 auth_error
-      const tokenFromUrl = urlParams.get('token');
-      const authError = urlParams.get('auth_error');
-      if (tokenFromUrl) {
-        localStorage.setItem('recordv2_token', tokenFromUrl);
-        window.history.replaceState({}, document.title, window.location.pathname);
-        showToast('Google 帳號登入成功！', 'success');
-      } else if (authError) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        showToast('登入失敗: ' + decodeURIComponent(authError), 'error');
-      }
+      // 檢查 URL Hash 是否有 Email 驗證 token
+      checkVerifyHash();
 
-      // 2. 獲取伺服器公開設定
-      await fetchServerConfig();
-
-      // 3. 檢查登入狀態
+      // 檢查登入狀態
       await checkAuth();
 
       // 音訊播放進度監聽
@@ -1626,6 +1604,7 @@
         `;
       }
       await loadMeetings();
+      await loadBotTasks();
     }
 
     // ====== 帳號認證 API ======
@@ -1709,8 +1688,8 @@
       const email = document.getElementById('reg-email').value.trim();
       const password = document.getElementById('reg-password').value;
 
-      if (!email.toLowerCase().endsWith('@gmail.com')) {
-        showToast('限制僅能使用 @gmail.com 信箱註冊！', 'error');
+      if (!email.toLowerCase().endsWith('@hawkeyetech.com.tw')) {
+        showToast('限制僅能使用 @hawkeyetech.com.tw 信箱註冊！', 'error');
         return;
       }
 
@@ -1998,6 +1977,298 @@
       document.getElementById('stat-total-dialogues').textContent = totalDialogues;
     }
 
+    // ====== Teams AI 自動撥入與排程管理 ======
+    let botTasks = [];
+    let botPollTimer = null;
+
+    function openScheduleBotModal() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 5);
+      const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      const timeInput = document.getElementById('bot-scheduled-time');
+      if (timeInput) timeInput.value = iso;
+      const timingScheduleRadio = document.querySelector('input[name="bot-timing-mode"][value="schedule"]');
+      if (timingScheduleRadio) timingScheduleRadio.checked = true;
+      toggleTimingMode('schedule');
+      openModal('schedule-bot-modal');
+    }
+
+    function toggleTimingMode(mode) {
+      const row = document.getElementById('bot-schedule-time-row');
+      const btn = document.getElementById('btn-submit-schedule-bot');
+      if (mode === 'now') {
+        if (row) row.style.display = 'none';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-bolt"></i> 立即指派 AI 撥入會議';
+      } else {
+        if (row) row.style.display = 'block';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-calendar-check"></i> 確認建立預約排程';
+      }
+    }
+
+    async function handleScheduleBotSubmit(e) {
+      e.preventDefault();
+      const title = document.getElementById('bot-meeting-title').value.trim();
+      const teamsUrl = document.getElementById('bot-teams-url').value.trim();
+      const timingMode = document.querySelector('input[name="bot-timing-mode"]:checked')?.value || 'schedule';
+      const scheduledTime = document.getElementById('bot-scheduled-time').value;
+      const maxDuration = parseInt(document.getElementById('bot-max-duration').value, 10) || 60;
+      const botName = document.getElementById('bot-display-name').value.trim() || 'AI 會議記錄助理 (Hawkeye AI)';
+      const notifyEmail = document.getElementById('bot-notify-email')?.value?.trim() || '';
+
+      if (!teamsUrl) {
+        showToast('請提供有效的 Teams 會議連結', 'error');
+        return;
+      }
+
+      let scheduledAt = '';
+      if (timingMode === 'schedule') {
+        if (!scheduledTime) {
+          showToast('請選擇預約撥入時間', 'error');
+          return;
+        }
+        scheduledAt = scheduledTime.replace('T', ' ') + ':00';
+      }
+
+      const submitBtn = document.getElementById('btn-submit-schedule-bot');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> 正在排程...';
+
+      try {
+        const res = await fetch(API.botSchedule, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            title: title || 'Teams 會議錄音',
+            teams_url: teamsUrl,
+            scheduled_at: scheduledAt,
+            max_duration_min: maxDuration,
+            bot_name: botName,
+            notify_email: notifyEmail,
+            join_now: (timingMode === 'now')
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message || '排程成功！', 'success');
+          closeModal('schedule-bot-modal');
+          document.getElementById('bot-meeting-title').value = '';
+          document.getElementById('bot-teams-url').value = '';
+          await loadBotTasks();
+        } else {
+          showToast(data.message || '預約排程失敗', 'error');
+        }
+      } catch (err) {
+        showToast('發送排程請求失敗: ' + err.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    }
+
+    async function loadBotTasks() {
+      const token = localStorage.getItem('recordv2_token');
+      if (!token) return;
+      try {
+        const res = await fetch(`${API.botTasks}?_t=${Date.now()}`, {
+          headers: getAuthHeaders(),
+          cache: 'no-store'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const prevTasks = botTasks;
+          botTasks = data.tasks || [];
+          renderBotTasks(botTasks);
+
+          // 檢查是否有剛轉譯完成的任務
+          botTasks.forEach(t => {
+            const prev = prevTasks.find(pt => pt.id === t.id);
+            if (prev && prev.status === 'transcribing' && t.status === 'completed') {
+              showToast(`🎉 Teams 會議【${t.title}】已完成語音轉錄與摘要！`, 'success');
+              loadMeetings();
+            }
+          });
+
+          // 若有活動中任務 (scheduled, joining, in_lobby, recording, transcribing)，每 5 秒定時輪詢
+          const hasActive = botTasks.some(t => ['scheduled', 'joining', 'in_lobby', 'recording', 'transcribing'].includes(t.status));
+          if (hasActive) {
+            if (botPollTimer) clearTimeout(botPollTimer);
+            botPollTimer = setTimeout(loadBotTasks, 5000);
+          } else if (botPollTimer) {
+            clearTimeout(botPollTimer);
+            botPollTimer = null;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load bot tasks:", e);
+      }
+    }
+
+    function renderBotTasks(tasks) {
+      const container = document.getElementById('bot-tasks-container');
+      const list = document.getElementById('bot-tasks-list');
+      if (!container || !list) return;
+
+      if (!tasks || tasks.length === 0) {
+        container.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      container.style.display = 'block';
+      list.innerHTML = '';
+
+      tasks.forEach(t => {
+        const card = document.createElement('div');
+        let statusBadge = '';
+        let actionBtn = '';
+        let borderStyle = 'border: 1px solid var(--border);';
+        let bgStyle = 'background: #ffffff;';
+
+        switch (t.status) {
+          case 'scheduled':
+            statusBadge = `<span style="background: #e0f2fe; color: #0284c7; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-regular fa-clock"></i> 預約等待撥入</span>`;
+            actionBtn = `
+              <button class="btn btn-primary btn-sm" onclick="triggerBotNow('${t.id}')" title="跳過等待，立刻讓 AI 助理撥入"><i class="fa-solid fa-bolt"></i> 立即撥入</button>
+              <button class="btn btn-outline btn-sm" onclick="stopBotTask('${t.id}')" title="取消排程"><i class="fa-solid fa-xmark"></i> 取消</button>
+            `;
+            break;
+          case 'joining':
+            statusBadge = `<span style="background: #fef3c7; color: #b45309; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-circle-notch fa-spin"></i> 正在撥入 Teams...</span>`;
+            borderStyle = 'border: 1.5px solid #f59e0b;';
+            bgStyle = 'background: #fffbeb;';
+            actionBtn = `<button class="btn btn-outline btn-sm" onclick="stopBotTask('${t.id}')"><i class="fa-solid fa-xmark"></i> 取消撥入</button>`;
+            break;
+          case 'in_lobby':
+            statusBadge = `<span style="background: #fef08a; color: #854d0e; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-door-open"></i> 大廳等候主持人准許</span>`;
+            borderStyle = 'border: 1.5px solid #eab308;';
+            bgStyle = 'background: #fefce8;';
+            actionBtn = `<button class="btn btn-outline btn-sm" onclick="stopBotTask('${t.id}')"><i class="fa-solid fa-phone-slash"></i> 結束通話</button>`;
+            break;
+          case 'recording':
+            statusBadge = `<span style="background: #fee2e2; color: #dc2626; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-record-vinyl fa-spin" style="color: #ef4444;"></i> 會議錄音中</span>`;
+            borderStyle = 'border: 1.5px solid #ef4444;';
+            bgStyle = 'background: #fef2f2;';
+            actionBtn = `<button class="btn btn-danger btn-sm" style="background: #ef4444; color: #fff;" onclick="stopBotTask('${t.id}')"><i class="fa-solid fa-stop"></i> 結束錄音並轉譯</button>`;
+            break;
+          case 'transcribing':
+            statusBadge = `<span style="background: #ede9fe; color: #7c3aed; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-wand-magic-sparkles fa-bounce"></i> 雲端 AI 轉錄中...</span>`;
+            borderStyle = 'border: 1.5px solid #8b5cf6;';
+            bgStyle = 'background: #f5f3ff;';
+            break;
+          case 'completed':
+            statusBadge = `<span style="background: #dcfce7; color: #15803d; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-circle-check"></i> 已完成轉譯</span>`;
+            actionBtn = `
+              ${t.meeting_id ? `<button class="btn btn-primary btn-sm" onclick="openMeetingDetail('${t.meeting_id}')"><i class="fa-solid fa-arrow-up-right-from-square"></i> 查看記錄</button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="deleteBotTask('${t.id}')" title="刪除任務記錄"><i class="fa-solid fa-trash-can"></i></button>
+            `;
+            break;
+          case 'failed':
+            statusBadge = `<span style="background: #fee2e2; color: #b91c1c; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-triangle-exclamation"></i> 失敗</span>`;
+            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteBotTask('${t.id}')" title="刪除"><i class="fa-solid fa-trash-can"></i></button>`;
+            break;
+          case 'cancelled':
+            statusBadge = `<span style="background: #f1f5f9; color: #64748b; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fa-solid fa-ban"></i> 已取消</span>`;
+            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="deleteBotTask('${t.id}')" title="刪除"><i class="fa-solid fa-trash-can"></i></button>`;
+            break;
+        }
+
+        card.style.cssText = `${bgStyle} ${borderStyle} border-radius: var(--radius-md); padding: 1.1rem 1.25rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; box-shadow: var(--shadow-sm);`;
+
+        card.innerHTML = `
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <div style="font-weight: 700; font-size: 0.98rem; color: #0f172a; word-break: break-word;">
+                <i class="fa-brands fa-microsoft" style="color: #5b5fc7; margin-right: 4px;"></i> ${escapeHtml(t.title)}
+              </div>
+              ${statusBadge}
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.3rem;">
+              <div><i class="fa-regular fa-clock" style="width: 14px;"></i> 預定撥入時間: <b>${escapeHtml(t.scheduled_at)}</b> (上限 ${t.max_duration_min} 分鐘)</div>
+              <div style="word-break: break-all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px;" title="${escapeHtml(t.teams_url)}">
+                <i class="fa-solid fa-link" style="width: 14px;"></i> 連結: <a href="${escapeHtml(t.teams_url)}" target="_blank" style="color: var(--primary); text-decoration: none;">${escapeHtml(t.teams_url)}</a>
+              </div>
+              ${t.error_message ? `<div style="color: #dc2626; margin-top: 0.25rem; font-weight: 600;"><i class="fa-solid fa-circle-exclamation"></i> 錯誤: ${escapeHtml(t.error_message)}</div>` : ''}
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 0.65rem;">
+            ${actionBtn}
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    async function triggerBotNow(taskId) {
+      if (!confirm('確定要跳過等待，立刻讓 AI 助理撥入此 Teams 會議嗎？')) return;
+      try {
+        const target = botTasks.find(t => t.id === taskId);
+        if (!target) return;
+        const res = await fetch(API.botSchedule, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            title: target.title,
+            teams_url: target.teams_url,
+            max_duration_min: target.max_duration_min,
+            bot_name: target.bot_name,
+            join_now: true
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('已啟動立即撥入！', 'success');
+          await loadBotTasks();
+        } else {
+          showToast(data.message || '啟動失敗', 'error');
+        }
+      } catch (e) {
+        showToast('請求錯誤: ' + e.message, 'error');
+      }
+    }
+
+    async function stopBotTask(taskId) {
+      if (!confirm('確定要結束或取消此會議任務嗎？若正在通話中將立即掛斷並自動進行錄音轉譯。')) return;
+      try {
+        const res = await fetch(API.botStop, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ task_id: taskId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.message || '已發送結束指令', 'info');
+          await loadBotTasks();
+          await loadMeetings();
+        } else {
+          showToast(data.message || '操作失敗', 'error');
+        }
+      } catch (e) {
+        showToast('請求錯誤: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteBotTask(taskId) {
+      if (!confirm('確定要刪除這筆任務記錄嗎？')) return;
+      try {
+        const res = await fetch(API.botDelete, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ task_id: taskId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('已刪除記錄', 'info');
+          await loadBotTasks();
+        } else {
+          showToast(data.message || '刪除失敗', 'error');
+        }
+      } catch (e) {
+        showToast('請求錯誤: ' + e.message, 'error');
+      }
+    }
+
     // ====== 會議詳情檢視 ======
     async function openMeetingDetail(meetingId) {
       cancelEditSummary();
@@ -2147,6 +2418,39 @@
       navigator.clipboard.writeText(txt).then(() => {
         showToast('會議摘要已成功複製至剪貼簿！', 'success');
       });
+    }
+
+    function downloadTranscript() {
+      if (!currentMeetingData && (!dialoguesData || dialoguesData.length === 0)) {
+        showToast('目前無可下載的逐字稿', 'warning');
+        return;
+      }
+
+      // 取得會議標題與檔名
+      const titleElem = document.getElementById('meeting-detail-title-bar');
+      const meetingTitle = (titleElem && titleElem.textContent.trim()) || (currentMeetingData ? (currentMeetingData.title || currentMeetingData.id) : '會議');
+      const filename = `${meetingTitle}_逐字稿.txt`;
+
+      let content = '';
+      if (currentMeetingData && currentMeetingData.transcript_text) {
+        content = currentMeetingData.transcript_text;
+      } else if (dialoguesData && dialoguesData.length > 0) {
+        content = dialoguesData.map(d => `[${d.time}] [${d.speaker}]: ${d.text}`).join('\n');
+      } else {
+        showToast('未找到逐字稿內容', 'warning');
+        return;
+      }
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已開始下載逐字稿檔案！', 'success');
     }
 
         // ====== 會議標題編輯功能 ======
@@ -2580,7 +2884,7 @@
       }
     }
 
-    // ====== 使用者個人設定 (自訂 API Key 與 密碼管理) ======
+    // ====== 使用者個人設定 (自訂 API Key) ======
     function openUserSettingsModal() {
       if (!currentUser) return;
       const input = document.getElementById('user-api-key-input');
@@ -2592,46 +2896,6 @@
       } else {
         badge.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-circle-info"></i> 目前狀態：使用系統共用 Key Pool 資源池 (未設定個人 Key)</span>`;
       }
-
-      // 依認證方式動態顯示密碼修改區塊
-      const pwdSec = document.getElementById('user-password-section');
-      if (pwdSec) {
-        if (currentUser.auth_provider === 'google') {
-          pwdSec.innerHTML = `
-            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.45rem;">
-              <i class="fa-brands fa-google" style="color: #4285F4; font-size: 1.1rem;"></i> Google 帳戶授權登入
-            </h4>
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; color: #475569; line-height: 1.5;">
-              您目前使用 <b>Google 帳戶 (${escapeHtml(currentUser.email)})</b> 登入。<br>
-              登入驗證與密碼安全由 Google 全權託管，<b>在本系統無需另外設定或修改密碼</b>。
-            </div>
-          `;
-        } else {
-          pwdSec.innerHTML = `
-            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e293b; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-              <i class="fa-solid fa-lock" style="color: var(--primary);"></i> 修改登入密碼
-            </h4>
-            <form onsubmit="handleChangeUserPassword(event)">
-              <div class="form-group" style="margin-bottom: 0.75rem;">
-                <label class="form-label" style="font-size: 0.82rem;">目前密碼</label>
-                <input type="password" id="curr-pwd-input" class="form-input" placeholder="請輸入目前的登入密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
-              </div>
-              <div class="form-group" style="margin-bottom: 0.75rem;">
-                <label class="form-label" style="font-size: 0.82rem;">新密碼 (至少 4 碼)</label>
-                <input type="password" id="new-pwd-input" class="form-input" minlength="4" placeholder="請輸入新的密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
-              </div>
-              <div class="form-group" style="margin-bottom: 1rem;">
-                <label class="form-label" style="font-size: 0.82rem;">確認新密碼</label>
-                <input type="password" id="new-pwd-confirm" class="form-input" minlength="4" placeholder="請再次輸入新密碼" required style="padding: 0.5rem 0.75rem; font-size: 0.9rem;">
-              </div>
-              <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem; padding: 0.55rem;">
-                <i class="fa-solid fa-check"></i> 確認修改密碼
-              </button>
-            </form>
-          `;
-        }
-      }
-
       openModal('user-settings-modal');
     }
 
@@ -2739,28 +3003,26 @@
     function switchAdminTab(tab) {
       const btnUsers = document.getElementById('admin-tab-btn-users');
       const btnKeys = document.getElementById('admin-tab-btn-keys');
-      const btnOauth = document.getElementById('admin-tab-btn-oauth');
       const btnLogs = document.getElementById('admin-tab-btn-logs');
       const viewUsers = document.getElementById('admin-tab-users-view');
       const viewKeys = document.getElementById('admin-tab-keys-view');
-      const viewOauth = document.getElementById('admin-tab-oauth-view');
       const viewLogs = document.getElementById('admin-tab-logs-view');
 
-      // 離開 log tab 時關閉自動重新整理
+      // 停止自動更新
       if (tab !== 'logs') {
         toggleLogAutoRefresh(false);
         const autoCheck = document.getElementById('admin-log-autorefresh');
         if (autoCheck) autoCheck.checked = false;
       }
 
-      [btnUsers, btnKeys, btnOauth, btnLogs].forEach(b => {
+      [btnUsers, btnKeys, btnLogs].forEach(b => {
         if (b) {
           b.style.borderBottomColor = 'transparent';
           b.style.color = 'var(--text-muted)';
           b.style.fontWeight = '600';
         }
       });
-      [viewUsers, viewKeys, viewOauth, viewLogs].forEach(v => {
+      [viewUsers, viewKeys, viewLogs].forEach(v => {
         if (v) v.style.display = 'none';
       });
 
@@ -2770,16 +3032,6 @@
         btnKeys.style.fontWeight = '700';
         viewKeys.style.display = 'block';
         loadAdminKeys();
-      } else if (tab === 'oauth') {
-        if (btnOauth) {
-          btnOauth.style.borderBottomColor = 'var(--primary)';
-          btnOauth.style.color = 'var(--primary)';
-          btnOauth.style.fontWeight = '700';
-        }
-        if (viewOauth) {
-          viewOauth.style.display = 'block';
-        }
-        loadAdminSettings();
       } else if (tab === 'logs') {
         btnLogs.style.borderBottomColor = 'var(--primary)';
         btnLogs.style.color = 'var(--primary)';
@@ -2792,88 +3044,6 @@
         btnUsers.style.fontWeight = '700';
         viewUsers.style.display = 'block';
         loadAdminUsers();
-      }
-    }
-
-    async function loadAdminSettings() {
-      try {
-        const res = await fetch(`${BASE_PATH}/api/config`);
-        const data = await res.json();
-        if (data.status === 'ok') {
-          const pubUrl = data.public_url || window.location.origin;
-          const urlInput = document.getElementById('admin-cfg-public-url');
-          const idInput = document.getElementById('admin-cfg-google-id');
-          const redirDisp = document.getElementById('admin-redirect-uri-display');
-
-          if (urlInput) urlInput.value = pubUrl;
-          if (idInput) idInput.value = data.google_client_id || '';
-          if (redirDisp) redirDisp.textContent = `${pubUrl}/api/auth/google/callback`;
-        }
-      } catch (e) {
-        console.error("loadAdminSettings error:", e);
-      }
-    }
-
-    async function saveAdminSettings() {
-      const pubInput = document.getElementById('admin-cfg-public-url');
-      const idInput = document.getElementById('admin-cfg-google-id');
-      const secInput = document.getElementById('admin-cfg-google-secret');
-
-      const public_url = pubInput ? pubInput.value.trim() : '';
-      const google_client_id = idInput ? idInput.value.trim() : '';
-      const google_client_secret = secInput ? secInput.value.trim() : '';
-
-      try {
-        const res = await fetch(`${BASE_PATH}/api/admin/config`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ public_url, google_client_id, google_client_secret })
-        });
-        const data = await res.json();
-        if (data.status === 'ok') {
-          showToast('系統與 Google OAuth 設定已成功儲存！', 'success');
-          await fetchServerConfig();
-          loadAdminSettings();
-        } else {
-          showToast(data.message || '儲存失敗', 'error');
-        }
-      } catch (e) {
-        showToast('無法連線到伺服器: ' + e.message, 'error');
-      }
-    }
-
-    async function handleAdminChangePassword(e) {
-      e.preventDefault();
-      const currInput = document.getElementById('admin-curr-pwd');
-      const newInput = document.getElementById('admin-new-pwd');
-      const confInput = document.getElementById('admin-confirm-pwd');
-
-      const current_password = currInput ? currInput.value : '';
-      const new_password = newInput ? newInput.value : '';
-      const confirm_password = confInput ? confInput.value : '';
-
-      if (new_password !== confirm_password) {
-        showToast('兩次輸入的新密碼不一致！', 'error');
-        return;
-      }
-
-      try {
-        const res = await fetch(`${BASE_PATH}/api/user/change_password`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ current_password, new_password })
-        });
-        const data = await res.json();
-        if (data.status === 'ok') {
-          showToast('管理員密碼已成功更新！請牢記您的新密碼。', 'success');
-          if (currInput) currInput.value = '';
-          if (newInput) newInput.value = '';
-          if (confInput) confInput.value = '';
-        } else {
-          showToast(data.message || '密碼修改失敗', 'error');
-        }
-      } catch (e) {
-        showToast('伺服器連線失敗: ' + e.message, 'error');
       }
     }
 

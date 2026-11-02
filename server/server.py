@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-AI Meeting System - Standalone Core Server
+Hawkeye AI Meeting System v2.0 - Core Server
 Features:
-1. Google OAuth 2.0 (Gmail) User Authentication.
-2. Dynamic Server URL injection for Web and Windows EXE Client.
-3. Gemini Key Pool dynamic load balancing (Least-Used routing).
-4. Audio chunk streaming with HTTP 206 Partial Content.
-5. Auto transcription & summary generation via Gemini AI.
+1. User Authentication & Authorization (Admin / User roles).
+2. Domain restriction: Only @hawkeyetech.com.tw allowed to register.
+3. Email verification flow.
+4. Per-user meeting isolation.
+5. Cloud AI Auto-Transcribe with Gemini 3.8 Flash.
+6. HTTP 206 Partial Content (Range Requests) for seamless audio seeking.
 """
 
 import os
@@ -22,8 +23,6 @@ if hasattr(time, "tzset"):
     time.tzset()
 
 import datetime
-import io
-import zipfile
 import urllib.parse
 import threading
 from pathlib import Path
@@ -35,53 +34,19 @@ if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
 
 import database
+import email_service
 import ai_transcriber
-import google_auth
+import teams_bot
 
-APP_DIR = os.path.abspath(os.path.join(SERVER_DIR, ".."))
-WEB_DIR = os.path.join(APP_DIR, "web")
-DATA_DIR = os.path.join(APP_DIR, "data")
+RECORDV2_DIR = os.path.abspath(os.path.join(SERVER_DIR, ".."))
+WEB_DIR = os.path.join(RECORDV2_DIR, "web")
+DATA_DIR = os.path.join(RECORDV2_DIR, "data")
 MEETINGS_DIR = os.path.join(DATA_DIR, "meetings")
 TO_BE_DELETE_DIR = os.path.join(DATA_DIR, "ToBeDelete")
-CONFIG_PATH = os.path.join(SERVER_DIR, "config.json")
 
 os.makedirs(WEB_DIR, exist_ok=True)
 os.makedirs(MEETINGS_DIR, exist_ok=True)
 os.makedirs(TO_BE_DELETE_DIR, exist_ok=True)
-
-def load_server_config():
-    cfg = {
-        "public_url": "",
-        "google_client_id": "",
-        "google_client_secret": "",
-        "admin_email": "",
-        "gemini_api_key": ""
-    }
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg.update(json.load(f))
-        except Exception:
-            pass
-
-    # 環境變數優先覆蓋
-    if os.environ.get("PUBLIC_URL"):
-        cfg["public_url"] = os.environ.get("PUBLIC_URL").rstrip("/")
-    if os.environ.get("GOOGLE_CLIENT_ID"):
-        cfg["google_client_id"] = os.environ.get("GOOGLE_CLIENT_ID").strip()
-    if os.environ.get("GOOGLE_CLIENT_SECRET"):
-        cfg["google_client_secret"] = os.environ.get("GOOGLE_CLIENT_SECRET").strip()
-    if os.environ.get("ADMIN_EMAIL"):
-        cfg["admin_email"] = os.environ.get("ADMIN_EMAIL").strip().lower()
-
-    return cfg
-
-def save_server_config(cfg):
-    try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving config: {e}")
 
 # 初始化資料庫
 database.init_db()
@@ -93,21 +58,28 @@ except Exception as e:
 # 全域轉錄任務狀態
 TASKS = {}
 
-def get_base_url(handler):
-    cfg = load_server_config()
-    if cfg.get("public_url"):
-        return cfg["public_url"].rstrip("/")
+# 全域 Teams 自動撥入與排程管理器
+teams_bot_mgr = teams_bot.get_bot_manager(TASKS)
 
-    # 從請求 Header 自動推導
-    host = handler.headers.get("Host", "localhost:8080")
-    proto = handler.headers.get("X-Forwarded-Proto", "http")
-    return f"{proto}://{host}"
+def read_json_body(handler):
+    try:
+        length = int(handler.headers.get("Content-Length", 0))
+        if length > 0:
+            return json.loads(handler.rfile.read(length).decode("utf-8"))
+    except Exception:
+        pass
+    return {}
 
 def get_auth_user(headers):
-    auth_header = headers.get("Authorization") or headers.get("X-Auth-Token")
-    if not auth_header:
-        return None
+    # 支援內部 MCP 工具專用金鑰授權
+    mcp_key = headers.get("X-MCP-Key") or ""
+    auth_header = headers.get("Authorization") or headers.get("X-Auth-Token") or ""
     token = auth_header.replace("Bearer ", "").strip()
+    if token == "mcp-teams-secret-key" or mcp_key == "mcp-teams-secret-key":
+        return {"id": 1, "email": "admin@hawkeyetech.com.tw", "name": "AI Assistant (MCP)", "role": "admin"}
+
+    if not token:
+        return None
     return database.get_user_by_session(token)
 
 def send_json(handler, status_code, data):
@@ -121,12 +93,6 @@ def send_json(handler, status_code, data):
     handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     handler.end_headers()
     handler.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
-
-def send_redirect(handler, target_url):
-    handler.send_response(302)
-    handler.send_header("Location", target_url)
-    handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.end_headers()
 
 def stream_media(handler, file_path):
     """處理音訊串流並支援 HTTP 206 Partial Content (Range requests)"""
@@ -200,44 +166,29 @@ def stream_media(handler, file_path):
         f.close()
         raise
 
-def handle_options(handler):
+def handle_recordv2_options(handler):
     handler.send_response(200)
     handler.send_header("Access-Control-Allow-Origin", "*")
     handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Auth-Token, X-Filename, X-Meeting-Title")
     handler.end_headers()
 
-def handle_api_get(handler):
+def handle_recordv2_get(handler):
     parsed = urllib.parse.urlparse(handler.path)
-    clean_path = parsed.path
+    path = parsed.path
+    clean_path = path[9:] if path.startswith("/recordv2") else path
+    prefix = "/recordv2" if path.startswith("/recordv2") else ""
     params = urllib.parse.parse_qs(parsed.query)
 
-    # 0. 短網址跳轉 /share/<token> -> /?share=<token>
+    # 0. 短網址跳轉 /share/<token> -> ?share=<token>
     if clean_path.startswith("/share/"):
         token = clean_path.replace("/share/", "").strip()
         handler.send_response(302)
-        handler.send_header("Location", f"/?share={urllib.parse.quote(token)}")
+        handler.send_header("Location", f"{prefix}/?share={urllib.parse.quote(token)}")
         handler.end_headers()
         return True
 
-    # 1. 取得當前伺服器公開資訊與設定 (給 Web 與 Client)
-    if clean_path == "/api/config":
-        cfg = load_server_config()
-        base_url = get_base_url(handler)
-        keys = database.get_all_system_keys()
-        active_keys = [k for k in keys if k["is_active"]]
-
-        send_json(handler, 200, {
-            "status": "ok",
-            "public_url": base_url,
-            "google_client_id": cfg.get("google_client_id", ""),
-            "has_google_auth": bool(cfg.get("google_client_id") and cfg.get("google_client_secret")),
-            "key_pool_count": len(active_keys),
-            "admin_email": cfg.get("admin_email", "")
-        })
-        return True
-
-    # 2. 取得當前登入者資訊
+    # 1. 取得當前登入者資訊
     if clean_path == "/api/auth/me":
         user = get_auth_user(handler.headers)
         if user:
@@ -246,203 +197,14 @@ def handle_api_get(handler):
             send_json(handler, 401, {"status": "error", "message": "未登入或憑證已過期"})
         return True
 
-    # 3. Google OAuth 登入跳轉
-    if clean_path == "/api/auth/google/login":
-        cfg = load_server_config()
-        client_id = cfg.get("google_client_id", "").strip()
-        client_secret = cfg.get("google_client_secret", "").strip()
-
-        if not client_id or not client_secret:
-            msg = "系統尚未配置 Google OAuth 憑證 (Client ID / Client Secret)。請系統管理員登入後台完成設定。"
-            handler.send_response(400)
-            handler.send_header("Content-Type", "text/html; charset=utf-8")
-            handler.end_headers()
-            html = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>尚未配置 Google 登入</title>
-            <style>body{{font-family:sans-serif;padding:40px;background:#f8fafc;color:#1e293b;line-height:1.6;max-width:600px;margin:auto;}}
-            .card{{background:#fff;border-radius:12px;padding:24px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);}}
-            h2{{color:#ef4444;margin-top:0;}} a{{color:#2563eb;text-decoration:none;font-weight:bold;}}</style></head>
-            <body><div class='card'><h2>⚠️ Google 登入尚未啟用</h2><p>{msg}</p><p><a href='/'>返回首頁</a></p></div></body></html>"""
-            handler.wfile.write(html.encode("utf-8"))
-            return True
-
-        base_url = get_base_url(handler)
-        redirect_uri = f"{base_url}/api/auth/google/callback"
-        state = params.get("state", [""])[0]
-        auth_url = google_auth.get_google_auth_url(client_id, redirect_uri, state=state)
-        send_redirect(handler, auth_url)
+    # 2. Email 驗證啟用
+    if clean_path == "/api/auth/verify":
+        token = params.get("token", [""])[0]
+        success, msg = database.verify_email_token(token)
+        send_json(handler, 200 if success else 400, {"status": "ok" if success else "error", "message": msg})
         return True
 
-    # 4. Google OAuth Callback 回調端點
-    if clean_path == "/api/auth/google/callback":
-        cfg = load_server_config()
-        client_id = cfg.get("google_client_id", "").strip()
-        client_secret = cfg.get("google_client_secret", "").strip()
-        base_url = get_base_url(handler)
-        redirect_uri = f"{base_url}/api/auth/google/callback"
-
-        code = params.get("code", [""])[0]
-        state = params.get("state", [""])[0]
-        error = params.get("error", [""])[0]
-
-        if error:
-            send_redirect(handler, f"/?auth_error={urllib.parse.quote(error)}")
-            return True
-
-        if not code:
-            send_redirect(handler, "/?auth_error=missing_code")
-            return True
-
-        try:
-            google_user = google_auth.exchange_code_for_user(code, client_id, client_secret, redirect_uri)
-            auth_res = database.get_or_create_google_user(
-                email=google_user["email"],
-                name=google_user["name"],
-                picture=google_user.get("picture", "")
-            )
-            token = auth_res["token"]
-            user = auth_res["user"]
-
-            # 若 state 為 client ticket，代表是來自 Windows EXE 錄音器的授權請求
-            if state and (state.startswith("ticket_") or google_auth._find_ticket_key(state)):
-                google_auth.bind_client_ticket(state, token, user)
-                # 顯示成功授權頁面，提示使用者可返回客戶端
-                handler.send_response(200)
-                handler.send_header("Content-Type", "text/html; charset=utf-8")
-                handler.end_headers()
-                html = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>登入成功</title>
-                <style>body{{font-family:Segoe UI, sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#fff;}}
-                .box{{text-align:center;background:#1e293b;padding:40px;border-radius:16px;border:1px solid #334155;max-width:400px;}}
-                .icon{{font-size:50px;color:#10b981;margin-bottom:16px;}} h2{{margin:0 0 10px 0;}} p{{color:#94a3b8;font-size:14px;}}</style></head>
-                <body><div class='box'><div class='icon'>✓</div><h2>登入成功！</h2><p>歡迎回來，{user.get('name')} ({user.get('email')})。<br>您現在可以關閉此瀏覽器分頁，並返回會議錄音器繼續使用。</p></div></body></html>"""
-                handler.wfile.write(html.encode("utf-8"))
-                return True
-
-            # 一般網頁登入，帶 token 跳轉回前端首頁
-            send_redirect(handler, f"/?token={token}")
-            return True
-        except Exception as e:
-            print(f"[Google Auth Error] {e}", flush=True)
-            send_redirect(handler, f"/?auth_error={urllib.parse.quote(str(e))}")
-            return True
-
-    # 5. 客戶端查詢登入票據狀態 (輪詢)
-    if clean_path == "/api/auth/client_ticket/poll":
-        ticket = params.get("ticket", [""])[0]
-        res = google_auth.poll_client_ticket(ticket)
-        send_json(handler, 200, res)
-        return True
-
-    # 6. 動態注入 URL 下載用戶端 ZIP 包 (含 會議錄音.exe + client_config.json)
-    if clean_path == "/api/download/client":
-        base_url = get_base_url(handler)
-        exe_src = None
-        for candidate in [
-            os.path.join(WEB_DIR, "會議錄音.exe"),
-            os.path.join(WEB_DIR, "會議錄音器.exe"),
-            os.path.join(APP_DIR, "client", "會議錄音.exe"),
-            os.path.join(APP_DIR, "client", "dist", "會議錄音.exe"),
-            os.path.join(APP_DIR, "client", "會議錄音器.exe"),
-            os.path.join(APP_DIR, "client", "dist", "會議錄音器.exe"),
-        ]:
-            if os.path.exists(candidate):
-                exe_src = candidate
-                break
-
-        cfg_content = json.dumps({
-            "server_url": base_url,
-            "token": "",
-            "user_email": "",
-            "user_name": "",
-            "auto_upload": True
-        }, ensure_ascii=False, indent=2)
-
-        mem_zip = io.BytesIO()
-        with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("client_config.json", cfg_content.encode("utf-8"))
-            if exe_src and os.path.exists(exe_src):
-                with open(exe_src, "rb") as ef:
-                    exe_bytes = ef.read()
-                    overlay_data = b"\n__SERVER_URL_OVERLAY__:" + base_url.encode("utf-8") + b":__END__\n"
-                    zf.writestr("會議錄音.exe", exe_bytes + overlay_data)
-
-        zip_data = mem_zip.getvalue()
-        handler.send_response(200)
-        handler.send_header("Content-Type", "application/zip")
-        filename_utf8 = urllib.parse.quote("會議錄音.zip")
-        handler.send_header("Content-Disposition", f'attachment; filename="MeetingRecorder.zip"; filename*=UTF-8\'\'{filename_utf8}')
-        handler.send_header("Content-Length", str(len(zip_data)))
-        handler.end_headers()
-        handler.wfile.write(zip_data)
-        return True
-
-    # 7. 單一 EXE 下載 (動態注入 URL Overlay)
-    if clean_path == "/api/download/client-exe":
-        base_url = get_base_url(handler)
-        exe_src = None
-        for candidate in [
-            os.path.join(WEB_DIR, "會議錄音.exe"),
-            os.path.join(WEB_DIR, "會議錄音器.exe"),
-            os.path.join(APP_DIR, "client", "會議錄音.exe"),
-            os.path.join(APP_DIR, "client", "dist", "會議錄音.exe"),
-            os.path.join(APP_DIR, "client", "會議錄音器.exe"),
-            os.path.join(APP_DIR, "client", "dist", "會議錄音器.exe"),
-        ]:
-            if os.path.exists(candidate):
-                exe_src = candidate
-                break
-
-        if not exe_src or not os.path.exists(exe_src):
-            send_json(handler, 404, {"status": "error", "message": "未找到 Windows 用戶端執行檔，請先執行 client/build_exe.py 編譯。"})
-            return True
-
-        with open(exe_src, "rb") as ef:
-            exe_bytes = ef.read()
-
-        overlay_data = b"\n__SERVER_URL_OVERLAY__:" + base_url.encode("utf-8") + b":__END__\n"
-        final_bytes = exe_bytes + overlay_data
-
-        handler.send_response(200)
-        handler.send_header("Content-Type", "application/octet-stream")
-        filename_utf8 = urllib.parse.quote("會議錄音.exe")
-        handler.send_header("Content-Disposition", f'attachment; filename="MeetingRecorder.exe"; filename*=UTF-8\'\'{filename_utf8}')
-        handler.send_header("Content-Length", str(len(final_bytes)))
-        handler.end_headers()
-        handler.wfile.write(final_bytes)
-        return True
-
-    # 7.5 安裝版 EXE 下載 (動態注入 URL Overlay)
-    if clean_path == "/api/download/client-installer":
-        base_url = get_base_url(handler)
-        exe_src = None
-        for candidate in [
-            os.path.join(WEB_DIR, "會議錄音_安裝檔.exe"),
-            os.path.join(APP_DIR, "client", "dist_installer", "會議錄音_安裝檔.exe"),
-            os.path.join(APP_DIR, "client", "會議錄音_安裝檔.exe"),
-        ]:
-            if os.path.exists(candidate):
-                exe_src = candidate
-                break
-
-        if not exe_src or not os.path.exists(exe_src):
-            send_json(handler, 404, {"status": "error", "message": "未找到安裝版執行檔，請先編譯安裝程式。"})
-            return True
-
-        with open(exe_src, "rb") as ef:
-            exe_bytes = ef.read()
-
-        overlay_data = b"\n__SERVER_URL_OVERLAY__:" + base_url.encode("utf-8") + b":__END__\n"
-        final_bytes = exe_bytes + overlay_data
-
-        handler.send_response(200)
-        handler.send_header("Content-Type", "application/octet-stream")
-        filename_utf8 = urllib.parse.quote("會議錄音_安裝檔.exe")
-        handler.send_header("Content-Disposition", f'attachment; filename="MeetingRecorder_Setup.exe"; filename*=UTF-8\'\'{filename_utf8}')
-        handler.send_header("Content-Length", str(len(final_bytes)))
-        handler.end_headers()
-        handler.wfile.write(final_bytes)
-        return True
-
-    # 8. 取得會議列表 (限登入者)
+    # 3. 取得會議列表 (限登入者)
     if clean_path == "/api/meetings":
         user = get_auth_user(handler.headers)
         if not user:
@@ -469,7 +231,61 @@ def handle_api_get(handler):
         send_json(handler, 200, {"status": "ok", "meetings": meetings, "active_tasks": active_tasks})
         return True
 
-    # 9. 取得特定會議詳細資料
+    # 3.1 取得 Teams Bot 預約排程與執行中任務 (限登入者)
+    if clean_path == "/api/bot/tasks":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入後檢視排程任務"})
+            return True
+        is_admin = (user["role"] == "admin")
+        bot_tasks = database.get_user_bot_tasks(user["id"], is_admin=is_admin)
+        send_json(handler, 200, {"status": "ok", "tasks": bot_tasks})
+        return True
+
+    # 3.2 取得單一 Teams Bot 任務狀態與結果
+    if clean_path == "/api/bot/task_status":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        task_id = params.get("task_id", [""])[0].strip()
+        if not task_id:
+            send_json(handler, 400, {"status": "error", "message": "缺少 task_id"})
+            return True
+        task = database.get_bot_task(task_id)
+        if not task:
+            send_json(handler, 404, {"status": "error", "message": "找不到該任務"})
+            return True
+
+        summary_text = ""
+        transcript_text = ""
+        if task.get("meeting_id"):
+            for root, dirs, files in os.walk(MEETINGS_DIR):
+                if os.path.basename(root) == task["meeting_id"]:
+                    for f in files:
+                        if f.endswith("_會議摘要.txt") or f.endswith("summary.txt"):
+                            try:
+                                with open(os.path.join(root, f), "r", encoding="utf-8") as sf:
+                                    summary_text = sf.read()
+                            except Exception:
+                                pass
+                        elif f.endswith("_逐字稿.txt") or f.endswith("transcript.txt"):
+                            try:
+                                with open(os.path.join(root, f), "r", encoding="utf-8") as tf:
+                                    transcript_text = tf.read()
+                            except Exception:
+                                pass
+                    break
+
+        send_json(handler, 200, {
+            "status": "ok",
+            "task": task,
+            "summary_text": summary_text,
+            "transcript_text": transcript_text
+        })
+        return True
+
+    # 4. 取得特定會議詳細資料 (逐字稿與摘要)
     if clean_path.startswith("/api/meeting/"):
         user = get_auth_user(handler.headers)
         if not user:
@@ -488,6 +304,7 @@ def handle_api_get(handler):
             send_json(handler, 404, {"status": "error", "message": "找不到該會議檔案"})
             return True
 
+        # 讀取摘要與逐字稿
         summary_text = ""
         transcript_text = ""
         audio_file = ""
@@ -542,14 +359,15 @@ def handle_api_get(handler):
         send_json(handler, 200, {
             "status": "ok",
             "id": meeting_id,
-            "audio_url": f"/api/media/{urllib.parse.quote(meeting_id)}/{urllib.parse.quote(audio_file)}",
+            "audio_url": f"{prefix}/api/media/{urllib.parse.quote(meeting_id)}/{urllib.parse.quote(audio_file)}",
             "summary_text": summary_text,
+            "transcript_text": transcript_text,
             "dialogues": dialogues,
             "speakers": sorted(list(speakers))
         })
         return True
 
-    # 9.1 公開唯讀分享：透過 Token 查詢會議內容 (免登入、唯讀)
+    # 4.1 公開唯讀分享：透過 Token 查詢會議內容 (免登入、唯讀，含過期檢查)
     if clean_path == "/api/share/meeting":
         token = params.get("token", [""])[0].strip()
         if not token:
@@ -631,14 +449,15 @@ def handle_api_get(handler):
             "owner_name": m.get("owner_name", ""),
             "is_shared_view": True,
             "share_expires_at": m.get("share_expires_at", ""),
-            "audio_url": f"/api/media/{urllib.parse.quote(meeting_id)}/{urllib.parse.quote(audio_file)}",
+            "audio_url": f"{prefix}/api/media/{urllib.parse.quote(meeting_id)}/{urllib.parse.quote(audio_file)}",
             "summary_text": summary_text,
+            "transcript_text": transcript_text,
             "dialogues": dialogues,
             "speakers": sorted(list(speakers))
         })
         return True
 
-    # 10. 音訊串流 (支援 HTTP 206 Range requests)
+    # 5. 音訊串流 (支援 HTTP 206 Range requests)
     if clean_path.startswith("/api/media/"):
         parts = clean_path.replace("/api/media/", "").split("/", 1)
         if len(parts) == 2:
@@ -653,14 +472,14 @@ def handle_api_get(handler):
         handler.send_error(404, "音訊檔案未找到")
         return True
 
-    # 11. 轉錄任務狀態查詢
+    # 6. 轉錄任務狀態查詢
     if clean_path == "/api/task_status":
         task_id = params.get("taskId", [""])[0]
         info = TASKS.get(task_id, {"status": "not_found", "message": "任務不存在"})
         send_json(handler, 200, info)
         return True
 
-    # 12. Admin: 使用者列表
+    # 7. Admin: 使用者列表
     if clean_path == "/api/admin/users":
         user = get_auth_user(handler.headers)
         if not user or user["role"] != "admin":
@@ -670,7 +489,7 @@ def handle_api_get(handler):
         send_json(handler, 200, {"status": "ok", "users": users})
         return True
 
-    # 13. Admin: Key Pool 資源池列表
+    # 8. Admin: Key Pool 資源池列表
     if clean_path == "/api/admin/keys":
         user = get_auth_user(handler.headers)
         if not user or user["role"] != "admin":
@@ -680,26 +499,59 @@ def handle_api_get(handler):
         send_json(handler, 200, {"status": "ok", "keys": keys})
         return True
 
-    return False
-
-def handle_api_post(handler):
-    parsed = urllib.parse.urlparse(handler.path)
-    clean_path = parsed.path
-    params = urllib.parse.parse_qs(parsed.query)
-
-    # 1. 客戶端建立登入 Ticket (供桌面錄音器跳轉瀏覽器 Google 授權)
-    if clean_path == "/api/auth/client_ticket/create":
-        ticket = google_auth.create_client_ticket()
-        base_url = get_base_url(handler)
-        login_url = f"{base_url}/api/auth/google/login?state={ticket}"
-        send_json(handler, 200, {
-            "status": "ok",
-            "ticket": ticket,
-            "login_url": login_url
-        })
+    # 9. Admin: 伺服器即時 Log 查詢
+    if clean_path == "/api/admin/logs":
+        user = get_auth_user(handler.headers)
+        if not user or user["role"] != "admin":
+            send_json(handler, 403, {"status": "error", "message": "無權限查看伺服器 Log"})
+            return True
+        log_path = "/home/joel/www/server.log"
+        lines = []
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as lf:
+                    lines = lf.readlines()[-250:]
+            except Exception as e:
+                lines = [f"讀取 Log 錯誤: {e}"]
+        send_json(handler, 200, {"status": "ok", "logs": "".join(lines)})
         return True
 
-    # 2. 本地帳密登入 (應急管理員入口)
+    return False
+
+def handle_recordv2_post(handler):
+    parsed = urllib.parse.urlparse(handler.path)
+    path = parsed.path
+    clean_path = path[9:] if path.startswith("/recordv2") else path
+    prefix = "/recordv2" if path.startswith("/recordv2") else ""
+    params = urllib.parse.parse_qs(parsed.query)
+
+    # 1. 註冊
+    if clean_path == "/api/auth/register":
+        try:
+            length = int(handler.headers.get("Content-Length", 0))
+            body = json.loads(handler.rfile.read(length).decode("utf-8"))
+            name = body.get("name", "")
+            email = body.get("email", "")
+            password = body.get("password", "")
+
+            reg_result = database.register_user(name, email, password)
+            email_service.send_verification_email(
+                reg_result["email"],
+                reg_result["name"],
+                reg_result["verify_token"]
+            )
+
+            send_json(handler, 200, {
+                "status": "ok",
+                "message": "註冊成功！驗證信件已寄出，請至信箱點擊啟用連結。",
+                "email": email,
+                "verify_token": reg_result["verify_token"]
+            })
+        except Exception as e:
+            send_json(handler, 400, {"status": "error", "message": str(e)})
+        return True
+
+    # 2. 登入
     if clean_path == "/api/auth/login":
         try:
             length = int(handler.headers.get("Content-Length", 0))
@@ -729,7 +581,96 @@ def handle_api_post(handler):
         send_json(handler, 200, {"status": "ok", "message": "已成功登出"})
         return True
 
+    # 3.1 Teams Bot 預約排程或立即撥入
+    if clean_path == "/api/bot/schedule":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入後預約 Teams 撥入"})
+            return True
+        try:
+            body = read_json_body(handler)
+            title = body.get("title", "").strip() or "Teams 會議錄音"
+            teams_url = body.get("teams_url", "").strip()
+            scheduled_at = body.get("scheduled_at", "").strip()
+            max_duration = int(body.get("max_duration_min", 60))
+            bot_name = body.get("bot_name", "AI 會議記錄助理").strip()
+            notify_email = body.get("notify_email", "").strip()
+            join_now = bool(body.get("join_now", False))
+
+            if not teams_url:
+                send_json(handler, 400, {"status": "error", "message": "請提供有效的 Teams 會議連結"})
+                return True
+
+            if join_now or not scheduled_at:
+                scheduled_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            task = database.create_bot_task(
+                user_id=user["id"],
+                title=title,
+                teams_url=teams_url,
+                scheduled_at=scheduled_at,
+                max_duration_min=max_duration,
+                bot_name=bot_name,
+                notify_email=notify_email
+            )
+
+            if join_now:
+                # 立即觸發執行
+                teams_bot_mgr.trigger_task_immediately(task["id"])
+                msg = "已成功啟動立即撥入 Teams 會議！"
+            else:
+                msg = f"已成功建立預約排程，AI 助理將於 {scheduled_at} 自動撥入！"
+
+            send_json(handler, 200, {"status": "ok", "task": task, "message": msg})
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
+    # 3.2 手動結束進行中的會議錄音或取消任務
+    if clean_path == "/api/bot/stop":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            body = read_json_body(handler)
+            task_id = body.get("task_id", "").strip()
+            is_admin = (user["role"] == "admin")
+            success, msg = teams_bot_mgr.stop_task(task_id, user["id"], is_admin=is_admin)
+            send_json(handler, 200 if success else 400, {"status": "ok" if success else "error", "message": msg})
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
+    # 3.3 刪除任務記錄
+    if clean_path == "/api/bot/delete":
+        user = get_auth_user(handler.headers)
+        if not user:
+            send_json(handler, 401, {"status": "error", "message": "請先登入"})
+            return True
+        try:
+            body = read_json_body(handler)
+            task_id = body.get("task_id", "").strip()
+            is_admin = (user["role"] == "admin")
+            affected = database.delete_bot_task(task_id, user["id"], is_admin=is_admin)
+            send_json(handler, 200 if affected else 400, {
+                "status": "ok" if affected else "error",
+                "message": "已成功刪除任務記錄" if affected else "刪除失敗或任務不存在"
+            })
+        except Exception as e:
+            send_json(handler, 500, {"status": "error", "message": str(e)})
+        return True
+
     # 4. 音訊上傳並啟動 AI 轉錄
+        # 轉錄任務忽略/關閉
+    if clean_path == "/api/task/dismiss":
+        data = read_json_body(handler)
+        tid = data.get("taskId", "")
+        if tid in TASKS:
+            del TASKS[tid]
+        send_json(handler, 200, {"status": "ok"})
+        return True
+
     if clean_path == "/api/upload":
         user = get_auth_user(handler.headers)
         if not user:
@@ -797,20 +738,7 @@ def handle_api_post(handler):
             send_json(handler, 500, {"status": "error", "message": str(e)})
         return True
 
-    # 5. 任務忽略
-    if clean_path == "/api/task/dismiss":
-        try:
-            length = int(handler.headers.get("Content-Length", 0))
-            body = json.loads(handler.rfile.read(length).decode("utf-8"))
-            tid = body.get("taskId", "")
-            if tid in TASKS:
-                del TASKS[tid]
-            send_json(handler, 200, {"status": "ok"})
-        except Exception:
-            send_json(handler, 200, {"status": "ok"})
-        return True
-
-    # 6. 刪除會議 (搬移至 ToBeDelete 備份目錄)
+    # 5. 刪除會議 (搬移至 ToBeDelete 備份目錄，不再重新掃描)
     if clean_path == "/api/meeting/delete":
         user = get_auth_user(handler.headers)
         if not user:
@@ -826,9 +754,11 @@ def handle_api_post(handler):
 
             is_admin = (user["role"] == "admin")
 
-            # 搬移實體檔案至 ToBeDelete 目錄
+            # 1. 搬移磁碟檔案至 ToBeDelete 備份目錄
             moved = False
-            possible_dirs = [os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)]
+            possible_dirs = [
+                os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)
+            ]
             if is_admin and os.path.exists(MEETINGS_DIR):
                 for uid in os.listdir(MEETINGS_DIR):
                     p = os.path.join(MEETINGS_DIR, uid, meeting_id)
@@ -840,29 +770,36 @@ def handle_api_post(handler):
                     user_sub = os.path.basename(os.path.dirname(m_path))
                     dest_user_dir = os.path.join(TO_BE_DELETE_DIR, user_sub)
                     os.makedirs(dest_user_dir, exist_ok=True)
+
                     dest_meeting_dir = os.path.join(dest_user_dir, meeting_id)
                     if os.path.exists(dest_meeting_dir):
                         stamp = datetime.datetime.now().strftime("_del_%Y%m%d_%H%M%S")
                         dest_meeting_dir = os.path.join(dest_user_dir, f"{meeting_id}{stamp}")
+
                     import shutil
                     shutil.move(m_path, dest_meeting_dir)
+                    print(f"[Meeting Delete] 會議 {meeting_id} 實體檔案已安全搬移至備份目錄: {dest_meeting_dir}", flush=True)
                     moved = True
                     break
 
+            # 2. 自 SQLite 資料庫刪除
             success = database.delete_meeting(meeting_id, user["id"], is_admin=is_admin)
+
+            # 3. 若有進行中的任務暫存，一併清除
             for tid in list(TASKS.keys()):
                 if TASKS[tid].get("folderName") == meeting_id or TASKS[tid].get("meetingId") == meeting_id:
                     del TASKS[tid]
 
             send_json(handler, 200 if (success or moved) else 400, {
                 "status": "ok" if (success or moved) else "error",
-                "message": "會議記錄已成功刪除" if (success or moved) else "找不到該會議或無刪除權限"
+                "message": "會議記錄已成功刪除並移至 ToBeDelete 目錄備份" if (success or moved) else "找不到該會議或無刪除權限"
             })
         except Exception as e:
             send_json(handler, 500, {"status": "error", "message": str(e)})
         return True
 
-    # 7. 更新會議摘要
+
+    # 5.1 更新會議摘要
     if clean_path == "/api/meeting/update_summary":
         user = get_auth_user(handler.headers)
         if not user:
@@ -878,8 +815,12 @@ def handle_api_post(handler):
                 return True
 
             is_admin = (user["role"] == "admin")
+
+            # 尋找該會議所在的實體目錄
             meeting_folder = None
-            possible_dirs = [os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)]
+            possible_dirs = [
+                os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)
+            ]
             if is_admin and os.path.exists(MEETINGS_DIR):
                 for uid in os.listdir(MEETINGS_DIR):
                     p = os.path.join(MEETINGS_DIR, uid, meeting_id)
@@ -895,23 +836,32 @@ def handle_api_post(handler):
                 send_json(handler, 404, {"status": "error", "message": "找不到該會議或無編輯權限"})
                 return True
 
+            # 尋找現有的摘要檔案
             summary_file_name = None
             for f in os.listdir(meeting_folder):
                 if f.endswith("_會議摘要.txt") or f.endswith("summary.txt") or f.endswith("_會議摘要.md"):
                     summary_file_name = f
                     break
+
             if not summary_file_name:
                 summary_file_name = f"{meeting_id}_會議摘要.txt"
 
-            with open(os.path.join(meeting_folder, summary_file_name), "w", encoding="utf-8") as sf:
+            target_file_path = os.path.join(meeting_folder, summary_file_name)
+            with open(target_file_path, "w", encoding="utf-8") as sf:
                 sf.write(new_summary)
 
-            send_json(handler, 200, {"status": "ok", "message": "會議摘要已成功更新", "summaryText": new_summary})
+            print(f"[Meeting Summary Update] 使用者 {user['email']} 已更新會議 {meeting_id} 的摘要: {target_file_path}", flush=True)
+
+            send_json(handler, 200, {
+                "status": "ok",
+                "message": "會議摘要已成功更新",
+                "summaryText": new_summary
+            })
         except Exception as e:
             send_json(handler, 500, {"status": "error", "message": str(e)})
         return True
 
-    # 8. 更新會議標題
+    # 5.2 更新會議標題
     if clean_path == "/api/meeting/update_title":
         user = get_auth_user(handler.headers)
         if not user:
@@ -927,9 +877,14 @@ def handle_api_post(handler):
                 return True
 
             is_admin = (user["role"] == "admin")
+
+            # 1. 更新資料庫
             success = database.update_meeting_title(meeting_id, new_title, user["id"], is_admin=is_admin)
 
-            possible_dirs = [os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)]
+            # 2. 同步將標題寫入會議資料夾內的 title.txt 作為持久實體備份
+            possible_dirs = [
+                os.path.join(MEETINGS_DIR, str(user["id"]), meeting_id)
+            ]
             if is_admin and os.path.exists(MEETINGS_DIR):
                 for uid in os.listdir(MEETINGS_DIR):
                     p = os.path.join(MEETINGS_DIR, uid, meeting_id)
@@ -946,14 +901,20 @@ def handle_api_post(handler):
                     break
 
             if success:
-                send_json(handler, 200, {"status": "ok", "message": "標題已更新", "newTitle": new_title})
+                print(f"[Meeting Title Update] 使用者 {user['email']} 已更新會議 {meeting_id} 標題為: {new_title}", flush=True)
+                send_json(handler, 200, {
+                    "status": "ok",
+                    "message": "會議標題已成功更新",
+                    "meetingId": meeting_id,
+                    "newTitle": new_title
+                })
             else:
                 send_json(handler, 404, {"status": "error", "message": "找不到該會議或無權限修改"})
         except Exception as e:
             send_json(handler, 500, {"status": "error", "message": str(e)})
         return True
 
-    # 8.1 產生或撤銷會議唯讀分享 Token (含自訂有效期限)
+    # 5.3 產生或撤銷會議唯讀分享 Token (含自訂有效期限)
     if clean_path == "/api/meeting/share":
         user = get_auth_user(handler.headers)
         if not user:
@@ -988,8 +949,11 @@ def handle_api_post(handler):
                 if err:
                     send_json(handler, 403, {"status": "error", "message": err})
                     return True
-                base_url = get_base_url(handler)
-                share_url = f"{base_url}/?share={token}"
+
+                host = handler.headers.get("Host", "localhost:8080")
+                proto = handler.headers.get("X-Forwarded-Proto", "http")
+                base_url = f"{proto}://{host}"
+                share_url = f"{base_url}{prefix}/?share={token}"
                 send_json(handler, 200, {
                     "status": "ok",
                     "share_token": token,
@@ -1000,7 +964,59 @@ def handle_api_post(handler):
             send_json(handler, 500, {"status": "error", "message": str(e)})
         return True
 
-    # 9. 使用者自訂 Google API Key
+    # 6. Admin: 切換使用者狀態
+    if clean_path == "/api/admin/users/toggle_active":
+        user = get_auth_user(handler.headers)
+        if not user or user["role"] != "admin":
+            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
+            return True
+        try:
+            length = int(handler.headers.get("Content-Length", 0))
+            body = json.loads(handler.rfile.read(length).decode("utf-8"))
+            target_user_id = body.get("userId")
+            active = body.get("active", True)
+            database.toggle_user_active(target_user_id, active)
+            send_json(handler, 200, {"status": "ok", "message": "狀態更新成功"})
+        except Exception as e:
+            send_json(handler, 400, {"status": "error", "message": str(e)})
+        return True
+
+    # 7. Admin: 手動啟用驗證使用者
+    if clean_path == "/api/admin/users/verify":
+        user = get_auth_user(handler.headers)
+        if not user or user["role"] != "admin":
+            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
+            return True
+        try:
+            length = int(handler.headers.get("Content-Length", 0))
+            body = json.loads(handler.rfile.read(length).decode("utf-8"))
+            target_user_id = body.get("userId")
+            database.manually_verify_user(target_user_id)
+            send_json(handler, 200, {"status": "ok", "message": "使用者已手動啟用完成"})
+        except Exception as e:
+            send_json(handler, 400, {"status": "error", "message": str(e)})
+        return True
+
+    # 8. Admin: 刪除使用者
+    if clean_path == "/api/admin/users/delete":
+        user = get_auth_user(handler.headers)
+        if not user or user["role"] != "admin":
+            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
+            return True
+        try:
+            length = int(handler.headers.get("Content-Length", 0))
+            body = json.loads(handler.rfile.read(length).decode("utf-8"))
+            target_user_id = body.get("userId")
+            if target_user_id == user["id"]:
+                send_json(handler, 400, {"status": "error", "message": "無法刪除目前登入中的 Admin 帳號"})
+                return True
+            database.delete_user(target_user_id)
+            send_json(handler, 200, {"status": "ok", "message": "使用者已刪除"})
+        except Exception as e:
+            send_json(handler, 400, {"status": "error", "message": str(e)})
+        return True
+
+    # 9. 使用者設定: 自訂個人 Google API Key
     if clean_path == "/api/user/api_key":
         user = get_auth_user(handler.headers)
         if not user:
@@ -1021,7 +1037,7 @@ def handle_api_post(handler):
             send_json(handler, 400, {"status": "error", "message": str(e)})
         return True
 
-    # 9.5 使用者 / 管理員修改密碼
+    # 10. 使用者設定: 修改自身密碼
     if clean_path == "/api/user/change_password":
         user = get_auth_user(handler.headers)
         if not user:
@@ -1033,10 +1049,7 @@ def handle_api_post(handler):
             curr_pwd = body.get("current_password", "")
             new_pwd = body.get("new_password", "")
             ok, msg = database.change_user_password(user["id"], curr_pwd, new_pwd)
-            if ok:
-                send_json(handler, 200, {"status": "ok", "message": msg})
-            else:
-                send_json(handler, 400, {"status": "error", "message": msg})
+            send_json(handler, 200 if ok else 400, {"status": "ok" if ok else "error", "message": msg})
         except Exception as e:
             send_json(handler, 400, {"status": "error", "message": str(e)})
         return True
@@ -1091,111 +1104,38 @@ def handle_api_post(handler):
             send_json(handler, 400, {"status": "error", "message": str(e)})
         return True
 
-    # 13. Admin: 儲存伺服器設定 (如 Google OAuth 憑證)
-    if clean_path == "/api/admin/config":
-        user = get_auth_user(handler.headers)
-        if not user or user["role"] != "admin":
-            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
-            return True
-        try:
-            length = int(handler.headers.get("Content-Length", 0))
-            body = json.loads(handler.rfile.read(length).decode("utf-8"))
-            cfg = load_server_config()
-            if "google_client_id" in body:
-                cfg["google_client_id"] = body["google_client_id"].strip()
-            if "google_client_secret" in body:
-                cfg["google_client_secret"] = body["google_client_secret"].strip()
-            if "public_url" in body:
-                cfg["public_url"] = body["public_url"].strip().rstrip("/")
-            save_server_config(cfg)
-            send_json(handler, 200, {"status": "ok", "message": "伺服器系統設定已成功更新！"})
-        except Exception as e:
-            send_json(handler, 400, {"status": "error", "message": str(e)})
-        return True
-
-    # 14. Admin: 使用者啟用/停用/刪除
-    if clean_path == "/api/admin/users/toggle_active":
-        user = get_auth_user(handler.headers)
-        if not user or user["role"] != "admin":
-            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
-            return True
-        try:
-            length = int(handler.headers.get("Content-Length", 0))
-            body = json.loads(handler.rfile.read(length).decode("utf-8"))
-            database.toggle_user_active(body.get("userId"), body.get("active", True))
-            send_json(handler, 200, {"status": "ok", "message": "狀態更新成功"})
-        except Exception as e:
-            send_json(handler, 400, {"status": "error", "message": str(e)})
-        return True
-
-    if clean_path == "/api/admin/users/delete":
-        user = get_auth_user(handler.headers)
-        if not user or user["role"] != "admin":
-            send_json(handler, 403, {"status": "error", "message": "無權限執行管理員動作"})
-            return True
-        try:
-            length = int(handler.headers.get("Content-Length", 0))
-            body = json.loads(handler.rfile.read(length).decode("utf-8"))
-            target_id = body.get("userId")
-            if target_id == user["id"]:
-                send_json(handler, 400, {"status": "error", "message": "無法刪除目前登入中的 Admin 帳號"})
-                return True
-            database.delete_user(target_id)
-            send_json(handler, 200, {"status": "ok", "message": "使用者已刪除"})
-        except Exception as e:
-            send_json(handler, 400, {"status": "error", "message": str(e)})
-        return True
-
     return False
 
-class StandaloneHandler(SimpleHTTPRequestHandler):
+class RecordV2Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, directory=None, **kwargs):
         if directory is None:
             directory = WEB_DIR
         super().__init__(*args, directory=directory, **kwargs)
 
     def do_OPTIONS(self):
-        handle_options(self)
-
-    def do_HEAD(self):
-        if handle_api_get(self):
-            return
-        super().do_HEAD()
+        handle_recordv2_options(self)
 
     def do_GET(self):
-        if handle_api_get(self):
-            return
-        if self.path.startswith("/api/"):
-            send_json(self, 404, {"status": "error", "message": "API 端點不存在 (404)"})
+        if handle_recordv2_get(self):
             return
         super().do_GET()
 
     def do_POST(self):
-        if handle_api_post(self):
+        if handle_recordv2_post(self):
             return
-        send_json(self, 404, {"status": "error", "message": "API 端點不存在 (404)"})
+        self.send_error(404, "Endpoint Not Found")
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
 def run_server(port=8080):
-    cfg = load_server_config()
-    server = ThreadedHTTPServer(("0.0.0.0", port), StandaloneHandler)
-    pub_url = cfg.get("public_url") or f"http://localhost:{port}"
-    print(f"==================================================")
-    print(f"🚀 AI Meeting System Server started!")
-    print(f"   Port:       {port}")
-    print(f"   Public URL: {pub_url}")
-    print(f"   Google Auth:{'Enabled' if cfg.get('google_client_id') else 'Not configured yet'}")
-    print(f"==================================================")
+    server = ThreadedHTTPServer(("0.0.0.0", port), RecordV2Handler)
+    print(f"🚀 RecordV2 Server running on http://0.0.0.0:{port}")
     server.serve_forever()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = 8080
     if len(sys.argv) > 1:
-        try:
-            port = int(sys.argv[1])
-        except ValueError:
-            pass
+        port = int(sys.argv[1])
     run_server(port)
