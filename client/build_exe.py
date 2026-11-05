@@ -23,6 +23,10 @@ def build():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     web_dir = os.path.abspath(os.path.join(base_dir, "..", "web"))
 
+    version_file = os.path.join(base_dir, "version.py")
+    with open(version_file, "w", encoding="utf-8") as f:
+        f.write(f'BUILD_VERSION = "{build_time}"\n')
+
     # 1. 以 PyInstaller 打包
     print(f"[1/2] 正在使用 PyInstaller 進行單一檔打包...")
     cmd = [

@@ -12,6 +12,7 @@ import re
 import time
 import json
 import datetime
+import tempfile
 import threading
 import urllib.parse
 import urllib.request
@@ -29,6 +30,11 @@ except Exception:
 from audio_engine import AudioEngine
 
 APP_VERSION = "2.0.0"
+try:
+    from version import BUILD_VERSION
+except Exception:
+    BUILD_VERSION = "2026/11/05-19:15"
+
 DEFAULT_SERVER_URL = "http://localhost:8080"
 MUTE_OPTION = "🚫 [不錄音] 關閉此聲道 (靜音)"
 
@@ -108,34 +114,49 @@ def save_client_config(cfg):
         print(f"Error saving config: {e}")
 
 class ModernMeter(tk.Canvas):
-    """自訂雙聲道 VU 聲音音量指示計"""
-    def __init__(self, parent, width=280, height=14, **kwargs):
-        super().__init__(parent, width=width, height=height, bg="#1e293b", highlightthickness=0, **kwargs)
+    """自訂雙聲道動態 VU 音量電平計 (含綠/黃/紅三段色彩與最佳飽和虛線參考)"""
+    def __init__(self, parent, width=160, height=14, **kwargs):
+        super().__init__(parent, width=width, height=height, bg="#e2e8f0", highlightthickness=1, highlightbackground="#cbd5e1", **kwargs)
         self.width = width
         self.height = height
         self.level = 0.0
 
-    def set_level(self, level):
+    def set_level(self, level, lbl_widget=None):
         self.level = max(0.0, min(1.0, level))
         self.delete("all")
-        if self.level <= 0.01:
-            return
+        w = self.winfo_width() if self.winfo_width() > 1 else self.width
+        h = self.winfo_height() if self.winfo_height() > 1 else self.height
 
-        w = int(self.width * self.level)
-        if self.level < 0.65:
-            color = "#10b981"
-        elif self.level < 0.85:
-            color = "#f59e0b"
-        else:
-            color = "#ef4444"
+        fill_w = int(w * self.level)
+        if fill_w > 0:
+            if self.level > 0.85:
+                color = "#dc2626"  # 紅色 (過載/破音警示)
+            elif self.level > 0.65:
+                color = "#d97706"  # 金黃色 (最佳飽和區)
+            else:
+                color = "#16a34a"  # 綠色 (正常)
+            self.create_rectangle(0, 0, fill_w, h, fill=color, outline="")
 
-        self.create_rectangle(0, 0, w, self.height, fill=color, outline="")
+        # 繪製最佳收音建議區間參考虛線 (65% ~ 85%)
+        ref_x1 = int(w * 0.65)
+        ref_x2 = int(w * 0.85)
+        self.create_line(ref_x1, 0, ref_x1, h, fill="#94a3b8", dash=(2, 2))
+        self.create_line(ref_x2, 0, ref_x2, h, fill="#f87171", dash=(2, 2))
+
+        if lbl_widget:
+            pct_int = int(self.level * 100)
+            if pct_int > 85:
+                lbl_widget.config(text=f"{pct_int}% ⚠️", fg="#dc2626")
+            elif pct_int > 65:
+                lbl_widget.config(text=f"{pct_int}% ★", fg="#d97706")
+            else:
+                lbl_widget.config(text=f"{pct_int}%", fg="#555555")
 
 class RecorderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"會議錄音器 v{APP_VERSION} (純錄音·雲端AI轉譯)")
-        self.root.geometry("820x760")
+        self.root.title(f"會議錄音 [v{BUILD_VERSION}] (純錄音·雲端AI轉譯)")
+        self.root.geometry("840x820")
         self.root.minsize(760, 700)
 
         self.cfg = load_client_config()
@@ -144,6 +165,9 @@ class RecorderApp:
         self.record_start_time = 0.0
         self.last_audio_file = None
         self.last_task_id = None
+
+        self.spk_gain_var = tk.DoubleVar(value=1.0)
+        self.mic_gain_var = tk.DoubleVar(value=1.0)
 
         self.spk_devices = []
         self.mic_devices = []
@@ -191,6 +215,8 @@ class RecorderApp:
         main_container = tk.Frame(self.root, bg="#f8fafc", padx=18, pady=12)
         main_container.pack(fill="both", expand=True)
 
+        self._check_and_render_recovery_banner(main_container)
+
         # 伺服器連線資訊條
         server_bar = tk.Frame(main_container, bg="#e2e8f0", padx=10, pady=4)
         server_bar.pack(fill="x", pady=(0, 10))
@@ -212,25 +238,65 @@ class RecorderApp:
         dev_grid = tk.Frame(card_dev, bg="#ffffff", pady=8)
         dev_grid.pack(fill="x")
 
-        # 揚聲器選擇
-        tk.Label(dev_grid, text="對方說話聲音 (系統揚聲器/耳機):", font=("Segoe UI", 9), bg="#ffffff").grid(row=0, column=0, sticky="w", pady=4)
+        # 揚聲器 (系統音訊) - 設備選取行
+        tk.Label(dev_grid, text="🔊 揚聲器 (對方):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=0, column=0, sticky="w", pady=2)
         self.spk_combo = ttk.Combobox(dev_grid, state="readonly", width=45)
-        self.spk_combo.grid(row=0, column=1, sticky="ew", padx=8, pady=4)
-        self.spk_meter = ModernMeter(dev_grid, width=160, height=12)
-        self.spk_meter.grid(row=0, column=2, padx=4, pady=4)
+        self.spk_combo.grid(row=0, column=1, sticky="ew", padx=8, pady=2)
+        self.spk_combo.bind("<<ComboboxSelected>>", self._on_device_changed)
 
-        # 麥克風選擇
-        tk.Label(dev_grid, text="自己發言聲音 (本機麥克風):", font=("Segoe UI", 9), bg="#ffffff").grid(row=1, column=0, sticky="w", pady=4)
+        refresh_btn = tk.Button(dev_grid, text="🔄 重新整理", font=("Segoe UI", 8),
+                                bg="#f1f5f9", fg="#475569", relief="flat", padx=6, pady=1, cursor="hand2", command=self._refresh_devices)
+        refresh_btn.grid(row=0, column=2, sticky="e", pady=2)
+
+        # 揚聲器增益與電平列
+        spk_ctrl_row = tk.Frame(dev_grid, bg="#ffffff")
+        spk_ctrl_row.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(2, 6))
+
+        tk.Label(spk_ctrl_row, text="收音增益：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
+        self.spk_gain_slider = ttk.Scale(spk_ctrl_row, from_=0.0, to=3.0, variable=self.spk_gain_var, orient="horizontal", length=160)
+        self.spk_gain_slider.pack(side="left", padx=(2, 4))
+        self.spk_gain_lbl = tk.Label(spk_ctrl_row, text="100%", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b", width=5)
+        self.spk_gain_lbl.pack(side="left")
+        self.spk_gain_slider.configure(command=lambda v: self.spk_gain_lbl.config(text=f"{int(float(v)*100)}%"))
+
+        tk.Button(spk_ctrl_row, text="↺ 100%", font=("Segoe UI", 8), bg="#f1f5f9", fg="#475569",
+                  relief="flat", padx=4, pady=1, cursor="hand2",
+                  command=lambda: (self.spk_gain_var.set(1.0), self.spk_gain_lbl.config(text="100%"))).pack(side="left", padx=(2, 10))
+
+        tk.Label(spk_ctrl_row, text="收音動態：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
+        self.spk_meter = ModernMeter(spk_ctrl_row, width=180, height=14)
+        self.spk_meter.pack(side="left", fill="x", expand=True, padx=(2, 4))
+        self.spk_meter_val_lbl = tk.Label(spk_ctrl_row, text="0%", font=("Consolas", 8), bg="#ffffff", fg="#64748b", width=5)
+        self.spk_meter_val_lbl.pack(side="left")
+
+        # 麥克風 (自己聲音) - 設備選取行
+        tk.Label(dev_grid, text="🎤 麥克風 (自己):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=2, column=0, sticky="w", pady=2)
         self.mic_combo = ttk.Combobox(dev_grid, state="readonly", width=45)
-        self.mic_combo.grid(row=1, column=1, sticky="ew", padx=8, pady=4)
-        self.mic_meter = ModernMeter(dev_grid, width=160, height=12)
-        self.mic_meter.grid(row=1, column=2, padx=4, pady=4)
+        self.mic_combo.grid(row=2, column=1, sticky="ew", padx=8, pady=2)
+        self.mic_combo.bind("<<ComboboxSelected>>", self._on_device_changed)
+
+        # 麥克風增益與電平列
+        mic_ctrl_row = tk.Frame(dev_grid, bg="#ffffff")
+        mic_ctrl_row.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(2, 4))
+
+        tk.Label(mic_ctrl_row, text="收音增益：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
+        self.mic_gain_slider = ttk.Scale(mic_ctrl_row, from_=0.0, to=3.0, variable=self.mic_gain_var, orient="horizontal", length=160)
+        self.mic_gain_slider.pack(side="left", padx=(2, 4))
+        self.mic_gain_lbl = tk.Label(mic_ctrl_row, text="100%", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b", width=5)
+        self.mic_gain_lbl.pack(side="left")
+        self.mic_gain_slider.configure(command=lambda v: self.mic_gain_lbl.config(text=f"{int(float(v)*100)}%"))
+
+        tk.Button(mic_ctrl_row, text="↺ 100%", font=("Segoe UI", 8), bg="#f1f5f9", fg="#475569",
+                  relief="flat", padx=4, pady=1, cursor="hand2",
+                  command=lambda: (self.mic_gain_var.set(1.0), self.mic_gain_lbl.config(text="100%"))).pack(side="left", padx=(2, 10))
+
+        tk.Label(mic_ctrl_row, text="收音動態：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
+        self.mic_meter = ModernMeter(mic_ctrl_row, width=180, height=14)
+        self.mic_meter.pack(side="left", fill="x", expand=True, padx=(2, 4))
+        self.mic_meter_val_lbl = tk.Label(mic_ctrl_row, text="0%", font=("Consolas", 8), bg="#ffffff", fg="#64748b", width=5)
+        self.mic_meter_val_lbl.pack(side="left")
 
         dev_grid.columnconfigure(1, weight=1)
-
-        refresh_btn = tk.Button(card_dev, text="🔄 重新整理裝置清單", font=("Segoe UI", 8),
-                                bg="#f1f5f9", fg="#475569", relief="flat", padx=8, pady=3, command=self._refresh_devices)
-        refresh_btn.pack(anchor="e")
 
         # 卡片 2: 錄音控制核心卡片
         card_rec = tk.Frame(main_container, bg="#ffffff", bd=1, relief="solid", padx=16, pady=16)
@@ -345,18 +411,138 @@ class RecorderApp:
                 self.mic_combo.current(0)
             else:
                 self.mic_combo.set(MUTE_OPTION)
+            self._on_device_changed()
         except Exception as e:
             messagebox.showerror("裝置列舉失敗", f"無法列出音訊裝置: {e}")
 
-    def _schedule_meter_update(self):
+    def _on_device_changed(self, event=None):
         if self.is_recording:
-            spk_lvl = getattr(self.engine, "spk_level", 0.0)
-            mic_lvl = getattr(self.engine, "mic_level", 0.0)
-            self.spk_meter.set_level(spk_lvl)
-            self.mic_meter.set_level(mic_lvl)
-        else:
-            self.spk_meter.set_level(0.0)
-            self.mic_meter.set_level(0.0)
+            return
+        spk_idx = self.spk_combo.current()
+        mic_idx = self.mic_combo.current()
+        spk_val = self.spk_combo.get()
+        mic_val = self.mic_combo.get()
+
+        spk_dev = None
+        if spk_val != MUTE_OPTION and 0 <= spk_idx < len(self.spk_devices):
+            spk_dev = self.spk_devices[spk_idx]
+
+        mic_dev = None
+        if mic_val != MUTE_OPTION and 0 <= mic_idx < len(self.mic_devices):
+            mic_dev = self.mic_devices[mic_idx]
+
+        self.engine.start_preview_monitoring(spk_dev, mic_dev)
+
+    def _check_and_render_recovery_banner(self, container):
+        """檢查是否有上次因異常中斷遺留的錄音暫存檔並提供一鍵救援"""
+        temp_dir = tempfile.gettempdir()
+        recoverable_pairs = []
+        try:
+            mic_files = [f for f in os.listdir(temp_dir) if f.startswith("teams_rec_mic_") and f.endswith(".wav")]
+            for mf in mic_files:
+                mp = os.path.join(temp_dir, mf)
+                suffix = mf.replace("teams_rec_mic_", "")
+                sp = os.path.join(temp_dir, f"teams_rec_spk_{suffix}")
+                m_size = os.path.getsize(mp) if os.path.exists(mp) else 0
+                s_size = os.path.getsize(sp) if os.path.exists(sp) else 0
+                total_mb = (m_size + s_size) / (1024 * 1024)
+                if total_mb >= 3.0:
+                    recoverable_pairs.append({
+                        "suffix": suffix,
+                        "mic": mp if m_size > 44 else None,
+                        "spk": sp if s_size > 44 else None,
+                        "size_mb": total_mb,
+                        "mtime": os.path.getmtime(mp)
+                    })
+        except Exception:
+            pass
+
+        if not recoverable_pairs:
+            return
+
+        latest = max(recoverable_pairs, key=lambda x: x["mtime"])
+        est_min = int(latest["size_mb"] / 10.5)
+        est_str = f"約 {est_min} 分鐘" if est_min > 0 else f"{latest['size_mb']:.1f} MB"
+
+        banner = tk.Frame(container, bg="#fef3c7", padx=12, pady=8, bd=1, relief="solid")
+        banner.pack(fill="x", pady=(0, 8))
+
+        tk.Label(
+            banner,
+            text=f"⚠️ 偵測到上次有未正常完成混音的錄音暫存檔 ({est_str})！",
+            font=("Segoe UI", 9, "bold"),
+            fg="#92400e",
+            bg="#fef3c7"
+        ).pack(side="left")
+
+        def _do_recover():
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            rescue_name = f"救援會議錄音_{now_str}.mp3"
+            rescue_path = os.path.join(RECORDINGS_DIR, rescue_name)
+            banner.destroy()
+            self.status_msg_label.config(text=f"正在為您救援匯出 {est_str} 錄音檔...", fg="#2563eb")
+
+            def _rec_worker():
+                try:
+                    self.engine.temp_spk_path = latest["spk"]
+                    self.engine.temp_mic_path = latest["mic"]
+                    self.engine.mix_and_export_mp3(
+                        rescue_path,
+                        spk_gain=self.spk_gain_var.get(),
+                        mic_gain=self.mic_gain_var.get(),
+                        progress_cb=lambda p, msg: self.root.after(0, lambda pct=int(p*100), m=msg: [
+                            self.progress_bar.config(value=pct),
+                            self.status_msg_label.config(text=f"救援匯出中 ({pct}%): {m}", fg="#2563eb")
+                        ])
+                    )
+                    self.last_audio_file = rescue_path
+                    self.root.after(0, lambda: [
+                        self.status_msg_label.config(text=f"🎉 救援成功！已匯出至：{rescue_path}", fg="#10b981"),
+                        messagebox.showinfo("救援成功", f"已成功救援並匯出錄音檔：\n{rescue_path}")
+                    ])
+                except Exception as ex:
+                    self.root.after(0, lambda: messagebox.showerror("救援失敗", f"救援匯出時發生錯誤: {ex}"))
+            threading.Thread(target=_rec_worker, daemon=True).start()
+
+        tk.Button(
+            banner,
+            text="立即一鍵救援匯出",
+            font=("Segoe UI", 8, "bold"),
+            bg="#d97706",
+            fg="#ffffff",
+            relief="flat",
+            padx=10,
+            pady=2,
+            cursor="hand2",
+            command=_do_recover
+        ).pack(side="right", padx=(8, 0))
+
+        tk.Button(
+            banner,
+            text="忽略",
+            font=("Segoe UI", 8),
+            bg="#fef3c7",
+            fg="#78350f",
+            relief="flat",
+            command=banner.destroy
+        ).pack(side="right")
+
+    def on_closing(self):
+        if self.is_recording:
+            if not messagebox.askyesno("正在錄音中", "錄音進行中，確定要離開嗎？"):
+                return
+        self.engine.cleanup()
+        self.root.destroy()
+
+    def _schedule_meter_update(self):
+        spk_gain = self.spk_gain_var.get()
+        mic_gain = self.mic_gain_var.get()
+
+        spk_lvl = getattr(self.engine, "spk_level", 0.0) * spk_gain
+        mic_lvl = getattr(self.engine, "mic_level", 0.0) * mic_gain
+
+        self.spk_meter.set_level(spk_lvl, getattr(self, "spk_meter_val_lbl", None))
+        self.mic_meter.set_level(mic_lvl, getattr(self, "mic_meter_val_lbl", None))
         self.root.after(40, self._schedule_meter_update)
 
     def _check_login_status_bg(self):
@@ -535,6 +721,7 @@ class RecorderApp:
             messagebox.showwarning("裝置設定錯誤", "揚聲器與麥克風不可同時設定為「不錄音」！\n請至少選擇一個音訊來源進行錄製。")
             return
 
+        self.engine.stop_preview_monitoring()
         self.record_btn.config(state="disabled")
         self.status_msg_label.config(text="正在啟動音訊錄製引擎...", fg="#2563eb")
 
@@ -591,6 +778,8 @@ class RecorderApp:
                 self.engine.stop_recording()
                 self.engine.mix_and_export_mp3(
                     out_path,
+                    spk_gain=self.spk_gain_var.get(),
+                    mic_gain=self.mic_gain_var.get(),
                     progress_cb=lambda p, msg: self.root.after(0, lambda pct=int(p * 100), m=msg: [
                         self.progress_bar.config(value=pct),
                         self.status_msg_label.config(text=f"匯出 MP3 ({pct}%): {m}", fg="#2563eb")
@@ -603,6 +792,7 @@ class RecorderApp:
                 self.root.after(0, lambda err=e: self.status_msg_label.config(text=f"匯出失敗: {err}", fg="#ef4444"))
             finally:
                 self.root.after(0, self._on_recording_stopped)
+                self.root.after(500, self._on_device_changed)
 
         threading.Thread(target=stop_worker, daemon=True).start()
 
@@ -739,6 +929,7 @@ class RecorderApp:
 def main():
     root = tk.Tk()
     app = RecorderApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 
 if __name__ == "__main__":
