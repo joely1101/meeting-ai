@@ -19,13 +19,14 @@ CONFIG_PATH = os.path.join(SERVER_DIR, "config.json")
 CHUNK_DURATION_SEC = 1800
 
 # 預設候選模型優先順序（最新穩定模型優先）
+# 預設候選模型優先順序（優先採用穩定成熟模型，預覽模型置後容錯）
 CANDIDATE_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
     "gemini-2.5-flash",
     "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
     "gemini-flash-lite-latest"
 ]
 
@@ -102,28 +103,35 @@ def parse_relative_time(t_str):
         return parts[0] * 60 + parts[1]
     return parts[0]
 
-def call_gemini_api(api_key, payload, candidate_models=None, timeout=300):
-    """嘗試候選模型呼叫 Gemini API，自帶錯誤容錯重試"""
+def call_gemini_api(api_key, payload, candidate_models=None, timeout=75, exclude_models=None):
+    """嘗試候選模型呼叫 Gemini API，自帶錯誤容錯重試與動態失敗模型跳過"""
     if candidate_models is None:
         candidate_models = CANDIDATE_MODELS
+
+    if exclude_models:
+        candidate_models = [m for m in candidate_models if m not in exclude_models]
 
     last_err = ""
     for model_name in candidate_models:
         model_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         try:
-            print(f"[AI Transcriber] 調度模型 {model_name}...", flush=True)
+            print(f"[AI Transcriber] 調度模型 {model_name} (timeout={timeout}s)...", flush=True)
             resp = requests.post(model_url, json=payload, headers={"Content-Type": "application/json"}, timeout=timeout)
             if resp.status_code == 200:
                 return resp.json(), model_name
-            elif resp.status_code == 503 or resp.status_code == 429:
+            elif resp.status_code in (503, 429):
                 last_err = f"模型 {model_name} 忙碌 ({resp.status_code})"
-                print(f"[AI Transcriber] {last_err}，嘗試切換模型...", flush=True)
+                print(f"[AI Transcriber] {last_err}，標記並切換下一模型...", flush=True)
+                if exclude_models is not None:
+                    exclude_models.add(model_name)
             else:
                 last_err = f"模型 {model_name} 錯誤 ({resp.status_code}): {resp.text[:150]}"
                 print(f"[AI Transcriber] {last_err}", flush=True)
         except Exception as e:
-            last_err = f"模型 {model_name} 連線異常: {e}"
-            print(f"[AI Transcriber] {last_err}", flush=True)
+            last_err = f"模型 {model_name} 連線異常/逾時: {e}"
+            print(f"[AI Transcriber] {last_err}，標記並切換下一模型...", flush=True)
+            if exclude_models is not None:
+                exclude_models.add(model_name)
 
     raise RuntimeError(f"Gemini API 請求失敗：\n{last_err}")
 
@@ -296,6 +304,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
 
     all_adjusted_lines = []
     prev_speakers = set()
+    failed_models = set()
     line_pattern = re.compile(r'^\[(\d+(?::\d{2}){1,2})\]\s*(.*)$')
 
     try:
@@ -359,7 +368,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
                 }
             }
 
-            res_json, used_model = call_gemini_api(api_key, payload)
+            res_json, used_model = call_gemini_api(api_key, payload, timeout=75, exclude_models=failed_models)
             raw_chunk_text = res_json.get("candidates", [])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
             # 轉換時間戳為整場絕對時間戳
@@ -411,7 +420,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
             "contents": [{"parts": [{"text": summary_prompt}]}],
             "generationConfig": {"temperature": 0.2}
         }
-        sum_res, _ = call_gemini_api(api_key, sum_payload)
+        sum_res, _ = call_gemini_api(api_key, sum_payload, timeout=45, exclude_models=failed_models)
         summary_text = sum_res.get("candidates", [])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
         return summary_text, full_transcript, total_sec
@@ -605,7 +614,7 @@ def generate_summary_from_transcript(transcript_text, api_key, profile_prompt_bl
             "temperature": 0.2
         }
     }
-    result_json, used_model = call_gemini_api(api_key, payload, candidate_models=candidate_models, timeout=90)
+    result_json, used_model = call_gemini_api(api_key, payload, candidate_models=candidate_models, timeout=45)
     candidates = result_json.get("candidates", [])
     if not candidates:
         raise RuntimeError("未能取得 AI 摘要回覆")
