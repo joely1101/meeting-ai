@@ -485,11 +485,12 @@
       line-height: 1.7;
       white-space: pre-wrap;
       word-break: break-word;
-      max-height: 280px;
+      min-height: 780px;
+      max-height: 960px;
       overflow-y: auto;
-      padding-right: 0.5rem;
+      padding-right: 0.75rem;
       background: #f8fafc;
-      padding: 1rem;
+      padding: 1.25rem 1.5rem;
       border-radius: 8px;
     }
 
@@ -1069,7 +1070,7 @@
         <div id="meeting-summary-text" class="summary-content">
           正在載入會議摘要...
         </div>
-        <textarea id="meeting-summary-edit-area" style="display: none; width: 100%; min-height: 250px; font-family: inherit; font-size: 0.95rem; line-height: 1.7; color: #1e293b; background: #ffffff; border: 1.5px solid var(--primary); border-radius: 8px; padding: 1rem; box-sizing: border-box; resize: vertical; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); margin-top: 0.5rem;" placeholder="在此編輯會議摘要內容 (支援 Markdown 格式)..."></textarea>
+        <textarea id="meeting-summary-edit-area" style="display: none; width: 100%; min-height: 780px; font-family: inherit; font-size: 0.95rem; line-height: 1.7; color: #1e293b; background: #ffffff; border: 1.5px solid var(--primary); border-radius: 8px; padding: 1rem; box-sizing: border-box; resize: vertical; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); margin-top: 0.5rem;" placeholder="在此編輯會議摘要內容 (支援 Markdown 格式)..."></textarea>
         <div id="summary-edit-hint" style="display: none; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; justify-content: space-between; align-items: center;">
           <span>💡 提示：可直接修改文字與待辦事項，完成後點擊「儲存修改」，按 <kbd style="background:#e2e8f0;padding:2px 5px;border-radius:4px;font-family:monospace;color:#1e293b;">Ctrl + Enter</kbd> 亦可快速儲存</span>
           <span id="summary-char-count">0 字</span>
