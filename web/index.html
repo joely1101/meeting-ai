@@ -431,6 +431,137 @@
       border-top: 1px solid #f1f5f9;
     }
 
+    /* ====== 會議清單工具列與清單模式 (List View) ====== */
+    .view-switch-btn {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #64748b;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.15s ease;
+    }
+    .view-switch-btn:hover {
+      color: #1e293b;
+    }
+    .view-switch-btn.active {
+      background: #ffffff;
+      color: var(--primary);
+      border-color: #cbd5e1;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .meetings-list-view {
+      display: block;
+    }
+    .meeting-list-table-wrapper {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      box-shadow: var(--shadow-sm);
+    }
+    .meeting-list-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+    .meeting-list-table thead tr {
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      color: #64748b;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .meeting-list-table th {
+      padding: 0.75rem 1rem;
+      white-space: nowrap;
+    }
+    .meeting-list-table tbody tr {
+      border-bottom: 1px solid #f1f5f9;
+      transition: background-color 0.15s ease;
+      cursor: pointer;
+    }
+    .meeting-list-table tbody tr:last-child {
+      border-bottom: none;
+    }
+    .meeting-list-table tbody tr:hover {
+      background-color: #f0f7ff;
+    }
+    .meeting-list-table td {
+      padding: 0.85rem 1rem;
+      vertical-align: middle;
+    }
+    .meeting-list-title {
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .meeting-list-title .title-text {
+      color: #1e293b;
+      transition: color 0.15s;
+      line-height: 1.4;
+    }
+    .meeting-list-table tbody tr:hover .title-text {
+      color: var(--primary);
+    }
+    .meeting-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+    .btn-edit-title-inline {
+      opacity: 0.6;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .meeting-list-table tbody tr:hover .btn-edit-title-inline {
+      opacity: 1;
+    }
+    .btn-edit-title-inline:hover {
+      color: var(--primary);
+      background: #e0f2fe;
+    }
+    .speaker-inline-text {
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      color: #475569;
+      font-size: 0.84rem;
+      max-width: 280px;
+    }
+    .badge-owner {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
     /* ====== 3. 會議播放與逐字稿 View ====== */
     .view-meeting-header {
       display: flex;
@@ -1013,9 +1144,25 @@
         </div>
       </div>
 
-      <!-- 會議清單網格 -->
-      <div id="meetings-list" class="meetings-grid">
-        <!-- 會議卡片由 JS 動態填入 -->
+      <!-- 會議清單操作工具列 (視圖切換) -->
+      <div class="meetings-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="font-size: 1.05rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i>
+          <span>會議清單</span>
+        </div>
+        <div style="display: inline-flex; align-items: center; background: #f1f5f9; padding: 3px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <button id="view-mode-list-btn" class="view-switch-btn active" onclick="switchMeetingViewMode('list')" title="切換為清單模式">
+            <i class="fa-solid fa-list-ul"></i> 清單模式
+          </button>
+          <button id="view-mode-card-btn" class="view-switch-btn" onclick="switchMeetingViewMode('card')" title="切換為卡片模式">
+            <i class="fa-solid fa-table-cells-large"></i> 卡片模式
+          </button>
+        </div>
+      </div>
+
+      <!-- 會議清單容器 (支援網格卡片與清單模式動態切換，預設清單模式) -->
+      <div id="meetings-list" class="meetings-list-view">
+        <!-- 會議由 JS 動態填入 -->
       </div>
     </section>
 
@@ -2049,14 +2196,61 @@
       }
     }
 
+    // 會議檢視模式：預設為清單模式 ('list')，可切換為卡片模式 ('card')
+    let currentViewMode = localStorage.getItem('meeting_view_mode') || 'list';
+
+    function switchMeetingViewMode(mode) {
+      currentViewMode = mode;
+      localStorage.setItem('meeting_view_mode', mode);
+      updateViewSwitchButtons();
+      renderDashboard();
+    }
+
+    function updateViewSwitchButtons() {
+      const btnList = document.getElementById('view-mode-list-btn');
+      const btnCard = document.getElementById('view-mode-card-btn');
+      if (btnList && btnCard) {
+        if (currentViewMode === 'list') {
+          btnList.classList.add('active');
+          btnCard.classList.remove('active');
+        } else {
+          btnCard.classList.add('active');
+          btnList.classList.remove('active');
+        }
+      }
+    }
+
+    // 發言人顯示最多三個且不要換行，逗點分開即可
+    function formatSpeakersInline(speakers) {
+      if (!speakers || speakers.length === 0) {
+        return { display: '無指定發言人', full: '' };
+      }
+      const cleanList = speakers
+        .map(s => (s || '').replace(/[\*\[\]\(\)]/g, '').trim())
+        .filter(s => s.length > 0);
+      
+      if (cleanList.length === 0) {
+        return { display: '無指定發言人', full: '' };
+      }
+
+      const fullStr = cleanList.join(', ');
+      const top3 = cleanList.slice(0, 3);
+      let displayStr = top3.join(', ');
+      if (cleanList.length > 3) {
+        displayStr += ` (+${cleanList.length - 3})`;
+      }
+      return { display: displayStr, full: fullStr };
+    }
+
     function renderDashboard() {
+      updateViewSwitchButtons();
       const container = document.getElementById('meetings-list');
       container.innerHTML = '';
 
       // 1. 若有正在進行的背景 AI 轉錄任務，置頂顯示動態進度條
       if (activeTasks && activeTasks.length > 0) {
         const tasksBanner = document.createElement('div');
-        tasksBanner.style.cssText = 'grid-column: 1/-1; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem;';
+        tasksBanner.style.cssText = 'grid-column: 1/-1; width: 100%; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem;';
         
         activeTasks.forEach(t => {
           const tCard = document.createElement('div');
@@ -2149,49 +2343,125 @@
       let totalSec = 0;
       let totalDialogues = 0;
 
-      allMeetings.forEach(m => {
-        totalSec += (m.duration_sec || 0);
-        totalDialogues += (m.dialogue_count || 0);
+      if (currentViewMode === 'card') {
+        container.className = 'meetings-grid';
+        allMeetings.forEach(m => {
+          totalSec += (m.duration_sec || 0);
+          totalDialogues += (m.dialogue_count || 0);
 
-        const card = document.createElement('div');
-        card.className = 'meeting-card';
+          const spkInfo = formatSpeakersInline(m.speakers);
+          const card = document.createElement('div');
+          card.className = 'meeting-card';
+          card.innerHTML = `
+            <div>
+              <div class="meeting-meta">
+                <span><i class="fa-regular fa-calendar"></i> ${m.date || '未知日期'}</span>
+                <span><i class="fa-regular fa-clock"></i> ${m.duration_str || '00:00'}</span>
+                ${m.owner_name ? `<span><i class="fa-regular fa-user"></i> ${escapeHtml(m.owner_name)}</span>` : ''}
+              </div>
+              <div class="meeting-card-title" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;">
+                <span style="flex: 1; cursor: pointer; line-height: 1.4;" onclick="openMeetingDetail('${m.id}')" title="點擊檢視會議">${escapeHtml(m.title)}</span>
+                <button class="btn btn-outline btn-sm" style="padding: 3px 8px; font-size: 0.8rem; border-color: #cbd5e1; color: var(--primary); background: #f8fafc; border-radius: 6px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500;" onclick="openEditTitleModal('${m.id}', event)" title="修改會議標題">
+                  <i class="fa-solid fa-pen-to-square"></i> 修改
+                </button>
+              </div>
+              <div class="speaker-inline-text" title="${escapeHtml(spkInfo.full)}" style="margin-bottom: 1.2rem;">
+                <i class="fa-solid fa-user-group" style="color: #94a3b8; margin-right: 5px; font-size: 0.75rem;"></i>
+                <span>${escapeHtml(spkInfo.display)}</span>
+              </div>
+            </div>
+            <div class="meeting-footer">
+              <button class="btn btn-primary" onclick="openMeetingDetail('${m.id}')">
+                <i class="fa-solid fa-play"></i> 播放與檢視摘要
+              </button>
+              <div style="display: flex; gap: 0.35rem; align-items: center;">
+                <button class="btn btn-outline btn-sm" onclick="openShareModal('${m.id}', event)" title="分享此會議記錄">
+                  <i class="fa-solid fa-share-nodes"></i> 分享
+                </button>
+                <button class="btn btn-ghost" style="color: var(--danger);" onclick="deleteMeeting('${m.id}')" title="刪除會議">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      } else {
+        // 清單模式 (List View - 預設)
+        container.className = 'meetings-list-view';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'meeting-list-table-wrapper';
 
-        const speakerTagsHtml = (m.speakers || []).map(s => {
-          const cleanSpk = s.replace(/[\*\[\]\(\)]/g, '').trim();
-          return `<span class="speaker-tag">${escapeHtml(cleanSpk || s)}</span>`;
-        }).join('');
-
-        card.innerHTML = `
-          <div>
-            <div class="meeting-meta">
-              <span><i class="fa-regular fa-calendar"></i> ${m.date || '未知日期'}</span>
-              <span><i class="fa-regular fa-clock"></i> ${m.duration_str || '00:00'}</span>
-              ${m.owner_name ? `<span><i class="fa-regular fa-user"></i> ${escapeHtml(m.owner_name)}</span>` : ''}
-            </div>
-            <div class="meeting-card-title" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;">
-              <span style="flex: 1; cursor: pointer; line-height: 1.4;" onclick="openMeetingDetail('${m.id}')" title="點擊檢視會議">${escapeHtml(m.title)}</span>
-              <button class="btn btn-outline btn-sm" style="padding: 3px 8px; font-size: 0.8rem; border-color: #cbd5e1; color: var(--primary); background: #f8fafc; border-radius: 6px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500;" onclick="openEditTitleModal('${m.id}', event)" title="修改會議標題">
-                <i class="fa-solid fa-pen-to-square"></i> 修改
-              </button>
-            </div>
-            <div class="speaker-tags">${speakerTagsHtml}</div>
-          </div>
-          <div class="meeting-footer">
-            <button class="btn btn-primary" onclick="openMeetingDetail('${m.id}')">
-              <i class="fa-solid fa-play"></i> 播放與檢視摘要
-            </button>
-            <div style="display: flex; gap: 0.35rem; align-items: center;">
-              <button class="btn btn-outline btn-sm" onclick="openShareModal('${m.id}', event)" title="分享此會議記錄">
-                <i class="fa-solid fa-share-nodes"></i> 分享
-              </button>
-              <button class="btn btn-ghost" style="color: var(--danger);" onclick="deleteMeeting('${m.id}')" title="刪除會議">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
-            </div>
-          </div>
+        const table = document.createElement('table');
+        table.className = 'meeting-list-table';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th style="min-width: 240px;">會議名稱</th>
+              <th style="width: 170px;">日期與時長</th>
+              <th style="min-width: 200px; max-width: 320px;">發言人</th>
+              <th style="width: 110px;">建立者</th>
+              <th style="width: 190px; text-align: right;">操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
         `;
-        container.appendChild(card);
-      });
+        const tbody = table.querySelector('tbody');
+
+        allMeetings.forEach(m => {
+          totalSec += (m.duration_sec || 0);
+          totalDialogues += (m.dialogue_count || 0);
+
+          const spkInfo = formatSpeakersInline(m.speakers);
+          const tr = document.createElement('tr');
+          tr.onclick = () => openMeetingDetail(m.id);
+          tr.innerHTML = `
+            <td>
+              <div class="meeting-list-title">
+                <span class="meeting-status-dot" title="已完成轉錄"></span>
+                <span class="title-text" title="${escapeHtml(m.title)}">${escapeHtml(m.title)}</span>
+                <button class="btn-edit-title-inline" onclick="openEditTitleModal('${m.id}', event)" title="修改會議標題">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+              </div>
+            </td>
+            <td>
+              <div style="font-size: 0.82rem; color: #334155; font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-regular fa-calendar" style="color: #94a3b8;"></i> ${m.date || '未知日期'}
+              </div>
+              <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px; display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-regular fa-clock" style="color: #94a3b8;"></i> ${m.duration_str || '00:00'}
+              </div>
+            </td>
+            <td>
+              <div class="speaker-inline-text" title="${escapeHtml(spkInfo.full)}">
+                <i class="fa-solid fa-user-group" style="color: #94a3b8; margin-right: 5px; font-size: 0.75rem;"></i>
+                <span>${escapeHtml(spkInfo.display)}</span>
+              </div>
+            </td>
+            <td>
+              ${m.owner_name ? `<span class="badge-owner"><i class="fa-regular fa-user" style="font-size: 0.7rem;"></i> ${escapeHtml(m.owner_name)}</span>` : '<span style="color: #cbd5e1;">-</span>'}
+            </td>
+            <td style="text-align: right;" onclick="event.stopPropagation()">
+              <div style="display: flex; gap: 0.35rem; align-items: center; justify-content: flex-end;">
+                <button class="btn btn-primary btn-sm" onclick="openMeetingDetail('${m.id}')" style="padding: 0.35rem 0.7rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.35rem;" title="播放與檢視摘要">
+                  <i class="fa-solid fa-play" style="font-size: 0.75rem;"></i> 播放與摘要
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="openShareModal('${m.id}', event)" style="padding: 0.35rem 0.55rem; font-size: 0.8rem;" title="分享此會議記錄">
+                  <i class="fa-solid fa-share-nodes"></i>
+                </button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--danger); padding: 0.35rem 0.55rem; font-size: 0.8rem;" onclick="deleteMeeting('${m.id}')" title="刪除會議">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        wrapper.appendChild(table);
+        container.appendChild(wrapper);
+      }
 
       // 填入統計
       document.getElementById('stat-total-meetings').textContent = allMeetings.length;
