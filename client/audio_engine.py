@@ -1,6 +1,6 @@
 """
 Teams & Windows Audio Recorder Engine
-支援 Windows WASAPI Loopback (喇叭系統音) 與麥克風同時擷取、低記憶體串流分塊混音並轉成 MP3
+支援 Windows WASAPI Loopback (喇叭系統音) 與麥克風同時擷取、非阻塞回調串流、低記憶體串流分塊混音並轉成 MP3
 """
 
 import os
@@ -10,6 +10,7 @@ import math
 import wave
 import tempfile
 import threading
+import queue
 import numpy as np
 import pyaudiowpatch as pyaudio
 import lameenc
@@ -19,10 +20,10 @@ class AudioEngine:
         self.p = None
         self.is_recording = False
         self.is_previewing = False
-        self.spk_thread = None
-        self.mic_thread = None
-        self.preview_mic_thread = None
-        self.preview_spk_thread = None
+        self.preview_mic_stream = None
+        self.preview_spk_stream = None
+        self.spk_rec = None
+        self.mic_rec = None
         
         # 即時音量 (0.0 ~ 1.0)
         self.spk_level = 0.0
@@ -38,17 +39,23 @@ class AudioEngine:
 
         self._init_pyaudio()
 
+    @property
+    def spk_thread(self):
+        return self.spk_rec["writer_th"] if self.spk_rec else None
+
+    @property
+    def mic_thread(self):
+        return self.mic_rec["writer_th"] if self.mic_rec else None
+
     def _init_pyaudio(self):
-        try:
-            if self.p is not None:
-                try:
-                    self.p.terminate()
-                except Exception:
-                    pass
-            self.p = pyaudio.PyAudio()
-        except Exception as e:
-            print(f"Error initializing PyAudio: {e}")
-            self.p = None
+        """確保 PyAudio 實例建立，若已存在則重複使用，避免 terminate 導致底層 C 庫崩潰"""
+        if self.p is None:
+            try:
+                self.p = pyaudio.PyAudio()
+            except Exception as e:
+                print(f"Error initializing PyAudio: {e}")
+                self.p = None
+        return self.p
 
     def get_speaker_devices(self):
         spk, _ = self.get_devices()
@@ -133,120 +140,136 @@ class AudioEngine:
             return 0.0
 
     def start_preview_monitoring(self, spk_device, mic_device):
-        """啟動未錄音時的即時試音監聽（只計算動態電平，不寫入檔案）"""
+        """啟動未錄音時的即時試音監聽（採用非阻塞回調，杜絕無聲音時卡住）"""
         if self.is_recording:
             return
         self.stop_preview_monitoring()
         self.is_previewing = True
+        self._init_pyaudio()
+        if not self.p:
+            return
 
         if mic_device:
-            self.preview_mic_thread = threading.Thread(
-                target=self._preview_stream,
-                args=(mic_device, "mic_level"),
-                daemon=True
-            )
-            self.preview_mic_thread.start()
+            def mic_cb(in_data, frame_count, time_info, status):
+                if self.is_previewing and not self.is_recording:
+                    self.mic_level = self._calculate_level(in_data)
+                return (None, pyaudio.paContinue)
+            try:
+                self.preview_mic_stream = self.p.open(
+                    format=pyaudio.paInt16,
+                    channels=max(1, mic_device["channels"]),
+                    rate=mic_device["rate"],
+                    input=True,
+                    input_device_index=mic_device["index"],
+                    frames_per_buffer=1024,
+                    stream_callback=mic_cb
+                )
+                self.preview_mic_stream.start_stream()
+            except Exception as e:
+                print(f"Error starting preview mic: {e}")
 
         if spk_device:
-            self.preview_spk_thread = threading.Thread(
-                target=self._preview_stream,
-                args=(spk_device, "spk_level"),
-                daemon=True
-            )
-            self.preview_spk_thread.start()
+            def spk_cb(in_data, frame_count, time_info, status):
+                if self.is_previewing and not self.is_recording:
+                    self.spk_level = self._calculate_level(in_data)
+                return (None, pyaudio.paContinue)
+            try:
+                self.preview_spk_stream = self.p.open(
+                    format=pyaudio.paInt16,
+                    channels=max(1, spk_device["channels"]),
+                    rate=spk_device["rate"],
+                    input=True,
+                    input_device_index=spk_device["index"],
+                    frames_per_buffer=1024,
+                    stream_callback=spk_cb
+                )
+                self.preview_spk_stream.start_stream()
+            except Exception as e:
+                print(f"Error starting preview spk: {e}")
 
     def stop_preview_monitoring(self):
-        """停止即時試音監聽"""
+        """立即停止即時試音監聽（瞬間關閉無阻塞）"""
         self.is_previewing = False
-        if hasattr(self, "preview_mic_thread") and self.preview_mic_thread and self.preview_mic_thread.is_alive():
-            self.preview_mic_thread.join(timeout=0.3)
-        if hasattr(self, "preview_spk_thread") and self.preview_spk_thread and self.preview_spk_thread.is_alive():
-            self.preview_spk_thread.join(timeout=0.3)
+        for attr in ["preview_mic_stream", "preview_spk_stream"]:
+            s = getattr(self, attr, None)
+            if s:
+                try:
+                    s.stop_stream()
+                    s.close()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
         self.spk_level = 0.0
         self.mic_level = 0.0
 
-    def _preview_stream(self, dev_info, level_attr):
+    def _start_recording_stream(self, dev_info, wav_path, level_attr):
+        """採用回調 + 佇列 + 獨立背景寫入執行緒，保證零掉幀且不阻塞任何事件"""
         channels = max(1, dev_info["channels"])
         rate = dev_info["rate"]
-        dev_index = dev_info["index"]
-        chunk_size = 1024
+        q = queue.Queue(maxsize=1000)
+        stop_event = threading.Event()
 
-        stream = None
-        try:
-            if not self.p:
-                self._init_pyaudio()
-            stream = self.p.open(
-                format=pyaudio.paInt16,
-                channels=channels,
-                rate=rate,
-                input=True,
-                input_device_index=dev_index,
-                frames_per_buffer=chunk_size
-            )
-            while self.is_previewing and not self.is_recording:
-                try:
-                    data = stream.read(chunk_size, exception_on_overflow=False)
-                    lvl = self._calculate_level(data)
-                    setattr(self, level_attr, lvl)
-                except Exception:
-                    time.sleep(0.02)
-        except Exception:
-            pass
-        finally:
-            setattr(self, level_attr, 0.0)
-            if stream:
-                try:
-                    stream.stop_stream()
-                    stream.close()
-                except Exception:
-                    pass
-
-    def _record_stream(self, dev_info, wav_path, level_attr):
-        """獨立串流錄音執行緒，直接串流寫入暫存 WAV 檔"""
-        channels = max(1, dev_info["channels"])
-        rate = dev_info["rate"]
-        dev_index = dev_info["index"]
-        chunk_size = 1024
-
-        wav_file = wave.open(wav_path, "wb")
-        wav_file.setnchannels(channels)
-        wav_file.setsampwidth(2) # 16-bit PCM
-        wav_file.setframerate(rate)
-
-        stream = None
-        try:
-            stream = self.p.open(
-                format=pyaudio.paInt16,
-                channels=channels,
-                rate=rate,
-                input=True,
-                input_device_index=dev_index,
-                frames_per_buffer=chunk_size
-            )
-
-            while self.is_recording:
-                try:
-                    data = stream.read(chunk_size, exception_on_overflow=False)
-                    wav_file.writeframes(data)
-                    lvl = self._calculate_level(data)
-                    setattr(self, level_attr, lvl)
-                except Exception:
-                    time.sleep(0.01)
-
-        except Exception as e:
-            print(f"Stream error for {dev_info['name']}: {e}")
-        finally:
-            setattr(self, level_attr, 0.0)
-            if stream:
-                try:
-                    stream.stop_stream()
-                    stream.close()
-                except Exception:
-                    pass
+        def writer_worker():
             try:
+                wav_file = wave.open(wav_path, "wb")
+                wav_file.setnchannels(channels)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(rate)
+                while not stop_event.is_set() or not q.empty():
+                    try:
+                        chunk = q.get(timeout=0.1)
+                        wav_file.writeframes(chunk)
+                    except queue.Empty:
+                        continue
                 wav_file.close()
+            except Exception as e:
+                print(f"Writer error ({wav_path}): {e}")
+
+        writer_th = threading.Thread(target=writer_worker, daemon=True)
+        writer_th.start()
+
+        def record_cb(in_data, frame_count, time_info, status):
+            if self.is_recording:
+                try:
+                    q.put_nowait(in_data)
+                except queue.Full:
+                    pass
+                setattr(self, level_attr, self._calculate_level(in_data))
+            return (None, pyaudio.paContinue)
+
+        stream = self.p.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=rate,
+            input=True,
+            input_device_index=dev_info["index"],
+            frames_per_buffer=1024,
+            stream_callback=record_cb
+        )
+        stream.start_stream()
+
+        return {
+            "stream": stream,
+            "stop_event": stop_event,
+            "writer_th": writer_th,
+            "queue": q
+        }
+
+    def _stop_recording_stream(self, rec_obj, level_attr):
+        if not rec_obj:
+            return
+        setattr(self, level_attr, 0.0)
+        stream = rec_obj.get("stream")
+        if stream:
+            try:
+                stream.stop_stream()
+                stream.close()
             except Exception:
                 pass
+        rec_obj["stop_event"].set()
+        th = rec_obj.get("writer_th")
+        if th and th.is_alive():
+            th.join(timeout=1.5)
 
     def start_recording(self, spk_device, mic_device):
         """開始錄音"""
@@ -256,6 +279,7 @@ class AudioEngine:
         if not spk_device and not mic_device:
             return False, "必須至少選擇一個設備（喇叭或麥克風）進行錄音"
 
+        # 1. 停止預覽監聽，安全不重設 PyAudio
         self.stop_preview_monitoring()
         self._init_pyaudio()
         if not self.p:
@@ -269,29 +293,24 @@ class AudioEngine:
         self.temp_spk_path = os.path.join(temp_dir, f"teams_rec_spk_{os.getpid()}_{int(time.time())}.wav")
         self.temp_mic_path = os.path.join(temp_dir, f"teams_rec_mic_{os.getpid()}_{int(time.time())}.wav")
 
-        if spk_device:
-            self.spk_thread = threading.Thread(
-                target=self._record_stream,
-                args=(spk_device, self.temp_spk_path, "spk_level"),
-                daemon=True
-            )
-            self.spk_thread.start()
-        else:
-            self.spk_thread = None
-            self.spk_level = 0.0
+        self.spk_rec = None
+        self.mic_rec = None
 
-        if mic_device:
-            self.mic_thread = threading.Thread(
-                target=self._record_stream,
-                args=(mic_device, self.temp_mic_path, "mic_level"),
-                daemon=True
-            )
-            self.mic_thread.start()
-        else:
-            self.mic_thread = None
-            self.mic_level = 0.0
+        try:
+            if spk_device:
+                self.spk_rec = self._start_recording_stream(spk_device, self.temp_spk_path, "spk_level")
+            else:
+                self.spk_level = 0.0
 
-        return True, "開始錄音"
+            if mic_device:
+                self.mic_rec = self._start_recording_stream(mic_device, self.temp_mic_path, "mic_level")
+            else:
+                self.mic_level = 0.0
+
+            return True, "開始錄音"
+        except Exception as e:
+            self.stop_recording()
+            return False, f"啟動錄音串流失敗: {e}"
 
     def stop_recording(self):
         """停止錄音"""
@@ -299,10 +318,13 @@ class AudioEngine:
             return
         self.is_recording = False
 
-        if self.spk_thread and self.spk_thread.is_alive():
-            self.spk_thread.join(timeout=2.0)
-        if self.mic_thread and self.mic_thread.is_alive():
-            self.mic_thread.join(timeout=2.0)
+        if hasattr(self, "spk_rec") and self.spk_rec:
+            self._stop_recording_stream(self.spk_rec, "spk_level")
+            self.spk_rec = None
+
+        if hasattr(self, "mic_rec") and self.mic_rec:
+            self._stop_recording_stream(self.mic_rec, "mic_level")
+            self.mic_rec = None
 
         self.spk_level = 0.0
         self.mic_level = 0.0
@@ -482,3 +504,4 @@ class AudioEngine:
                 self.p.terminate()
             except Exception:
                 pass
+            self.p = None
