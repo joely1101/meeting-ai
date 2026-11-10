@@ -19,15 +19,11 @@ CONFIG_PATH = os.path.join(SERVER_DIR, "config.json")
 CHUNK_DURATION_SEC = 1800
 
 # 預設候選模型優先順序（最新穩定模型優先）
-# 預設候選模型優先順序（優先採用穩定成熟模型，預覽模型置後容錯）
 CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-3.8-flash",
-    "gemini-flash-lite-latest"
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-flash"
 ]
 
 def load_config():
@@ -368,7 +364,7 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
                 }
             }
 
-            res_json, used_model = call_gemini_api(api_key, payload, timeout=75, exclude_models=failed_models)
+            res_json, used_model = call_gemini_api(api_key, payload, timeout=180, exclude_models=failed_models)
             raw_chunk_text = res_json.get("candidates", [])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
             # 轉換時間戳為整場絕對時間戳
@@ -406,12 +402,24 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
         tasks_dict[task_id]["progress"] = 85
         tasks_dict[task_id]["message"] = "各切片轉錄完成，正在提煉全局結構化會議摘要與待辦清單..."
 
-        summary_prompt = f"""請根據以下完整的會議逐字稿內容，生成一份清晰、專業且高度結構化的會議總結。
-
-格式要求如下：
+        summary_instruction = """請務必使用以下特定標籤包裹【會議摘要】：
+===SUMMARY_START===
 ### 📊 會議摘要 (繁體中文)
 - 📌 核心重點與討論主題 (條列式整理)
 - ✅ 待辦事項與決策指派 (Action Items)
+===SUMMARY_END===
+**重要：無論會議是英文、中文或中英雙語，【會議摘要】請一律使用清晰的「繁體中文」進行結構化總結。**"""
+
+        profile_hint = f"\n【會議設定檔與熱詞參考】：\n{profile_prompt_block}\n" if profile_prompt_block else ""
+
+        summary_prompt = f"""請根據以下完整的會議逐字稿內容，生成一份清晰、專業且高度結構化的會議總結。
+
+要求如下：
+1. 語言處理原則：
+   - 【會議摘要】：無論錄音或會議使用何種語言（英文、繁體中文或中英混雜），一律使用清晰的「繁體中文」進行重點總結。
+2. 保持語句通順，自動校正語音辨識的同音錯字與常見 IT/商業術語。
+{profile_hint}
+{summary_instruction}
 
 逐字稿內容如下：
 {full_transcript[:150000]}
@@ -421,7 +429,12 @@ def transcribe_chunked_30m(task_id, audio_path, total_sec, api_key, key_source, 
             "generationConfig": {"temperature": 0.2}
         }
         sum_res, _ = call_gemini_api(api_key, sum_payload, timeout=45, exclude_models=failed_models)
-        summary_text = sum_res.get("candidates", [])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        raw_summary = sum_res.get("candidates", [])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        summary_text = raw_summary.strip()
+        if "===SUMMARY_START===" in raw_summary and "===SUMMARY_END===" in raw_summary:
+            summary_text = raw_summary.split("===SUMMARY_START===")[1].split("===SUMMARY_END===")[0].strip()
+        elif "===SUMMARY_START===" in raw_summary:
+            summary_text = raw_summary.split("===SUMMARY_START===")[1].strip()
 
         return summary_text, full_transcript, total_sec
 
