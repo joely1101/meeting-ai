@@ -1,14 +1,13 @@
 """
-會議錄音器 Client v2.0
+Hawkeye 會議錄音器 Client v2.0
 - 純錄音無負擔架構：移除本機轉譯，由伺服器雲端 AI 處理
-- 支援 Google (Gmail) 帳號快速登入認證
+- 企業帳號登入整合 (@hawkeyetech.com.tw)
 - 雙向無損混音錄音 (WASAPI Loopback + 麥克風)
 - 錄音完成後一鍵自動/手動上傳至雲端伺服器
 """
 
 import os
 import sys
-import re
 import time
 import json
 import datetime
@@ -35,7 +34,7 @@ try:
 except Exception:
     BUILD_VERSION = "2026/11/05-19:15"
 
-DEFAULT_SERVER_URL = "http://localhost:8080"
+DEFAULT_SERVER_URL = "https://tools.jumper.cloudns.ch/recordv2"
 MUTE_OPTION = "🚫 [不錄音] 關閉此聲道 (靜音)"
 
 # 1. 錄音檔存檔目錄：使用者家目錄下的「會議錄音」資料夾 (例如 C:\Users\Joel\會議錄音)
@@ -43,68 +42,35 @@ USER_HOME = os.path.expanduser("~")
 RECORDINGS_DIR = os.path.join(USER_HOME, "會議錄音")
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
-# 2. 客戶端設定檔路徑：存於 %APPDATA%\MeetingRecorder
-APP_DATA_DIR = os.path.join(os.environ.get("APPDATA", USER_HOME), "MeetingRecorder")
+# 2. 客戶端設定檔路徑：存於 %APPDATA%\HawkeyeRecorder，確保 EXE 重啟或單一執行檔解壓後仍長久記住登入狀態
+APP_DATA_DIR = os.path.join(os.environ.get("APPDATA", USER_HOME), "HawkeyeRecorder")
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 CONFIG_PATH = os.path.join(APP_DATA_DIR, "client_config.json")
 
-def detect_overlay_server_url():
-    """嘗試從目前執行的 EXE 二進位尾端讀取 Overlay 注入的 URL"""
-    try:
-        exe_path = os.path.abspath(sys.argv[0])
-        if os.path.exists(exe_path) and exe_path.lower().endswith(".exe"):
-            with open(exe_path, "rb") as f:
-                f.seek(max(0, os.path.getsize(exe_path) - 8192))
-                tail_data = f.read()
-                # 匹配 __SERVER_URL_OVERLAY__:(http...):__END__
-                m = re.search(b'__SERVER_URL_OVERLAY__:(https?://.*?):__END__', tail_data)
-                if m:
-                    url = m.group(1).decode("utf-8", errors="ignore").strip().rstrip("/")
-                    return url
-    except Exception as e:
-        print(f"Error detecting overlay URL: {e}")
-    return None
-
 def load_client_config():
-    cfg = {
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # 嘗試遷移同目錄下的舊設定 (若有的話)
+    local_cfg = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "client_config.json")
+    if os.path.exists(local_cfg):
+        try:
+            with open(local_cfg, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                save_client_config(data)
+                return data
+        except Exception:
+            pass
+    return {
         "server_url": DEFAULT_SERVER_URL,
         "token": "",
         "user_email": "",
         "user_name": "",
         "auto_upload": True
     }
-
-    # 1. 優先檢查同目錄下的 client_config.json (免安裝隨身攜帶包)
-    local_cfg = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "client_config.json")
-    if os.path.exists(local_cfg):
-        try:
-            with open(local_cfg, "r", encoding="utf-8") as f:
-                cfg.update(json.load(f))
-                if cfg.get("server_url"):
-                    return cfg
-        except Exception:
-            pass
-
-    # 2. 檢查 EXE 是否帶有 Overlay 注入的 URL (優先套用剛下載的伺服器位址)
-    overlay_url = detect_overlay_server_url()
-    if overlay_url:
-        cfg["server_url"] = overlay_url
-
-    # 3. 檢查 APPDATA (讀取 token 與個人偏好)
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                appdata_cfg = json.load(f)
-                for k in ["token", "user_name", "user_email", "auto_upload"]:
-                    if k in appdata_cfg:
-                        cfg[k] = appdata_cfg[k]
-                # 若 EXE 內無 Overlay，才採用 APPDATA 記錄的歷史網址
-                if not overlay_url and appdata_cfg.get("server_url"):
-                    cfg["server_url"] = appdata_cfg["server_url"]
-        except Exception:
-            pass
-
-    return cfg
 
 def save_client_config(cfg):
     try:
@@ -155,7 +121,7 @@ class ModernMeter(tk.Canvas):
 class RecorderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"會議錄音 [v{BUILD_VERSION}] (純錄音·雲端AI轉譯)")
+        self.root.title(f"Hawkeye 會議錄音器 [v{BUILD_VERSION}] (純錄音·雲端AI轉譯)")
         self.root.geometry("840x820")
         self.root.minsize(760, 700)
 
@@ -196,7 +162,7 @@ class RecorderApp:
         title_frame = tk.Frame(top_bar, bg="#0f172a")
         title_frame.pack(side="left", pady=10)
 
-        tk.Label(title_frame, text="🎙️ 會議錄音器", font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#0f172a").pack(side="left")
+        tk.Label(title_frame, text="🎙️ Hawkeye 會議錄音器", font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#0f172a").pack(side="left")
         tk.Label(title_frame, text="v2.0 雲端版", font=("Segoe UI", 8), fg="#38bdf8", bg="#0f172a", padx=6).pack(side="left")
 
         # 使用者狀態區
@@ -211,45 +177,41 @@ class RecorderApp:
                                   relief="flat", padx=10, pady=2, cursor="hand2", command=self.on_auth_btn_clicked)
         self.auth_btn.pack(side="left")
 
-        # 主體內容區
+        # 主體內容區 (適度邊界留白，留出足夠垂直空間)
         main_container = tk.Frame(self.root, bg="#f8fafc", padx=18, pady=12)
         main_container.pack(fill="both", expand=True)
 
         self._check_and_render_recovery_banner(main_container)
 
-        # 伺服器連線資訊條
-        server_bar = tk.Frame(main_container, bg="#e2e8f0", padx=10, pady=4)
-        server_bar.pack(fill="x", pady=(0, 10))
+        # 2. 會議主題資訊卡片
+        info_card = tk.LabelFrame(main_container, text=" 會議主題設定 ", font=("Segoe UI", 9, "bold"),
+                                  bg="#ffffff", fg="#334155", padx=14, pady=10, relief="groove")
+        info_card.pack(fill="x", pady=(0, 8))
 
-        tk.Label(server_bar, text="🌐 伺服器網址:", font=("Segoe UI", 8, "bold"), bg="#e2e8f0", fg="#475569").pack(side="left")
-        self.server_url_display = tk.Label(server_bar, text=self.cfg.get("server_url", DEFAULT_SERVER_URL),
-                                           font=("Segoe UI", 8), bg="#e2e8f0", fg="#2563eb")
-        self.server_url_display.pack(side="left", padx=6)
+        tk.Label(info_card, text="會議名稱 / 主題：", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=0, column=0, sticky="w", pady=4)
+        self.title_entry = tk.Entry(info_card, font=("Segoe UI", 10), bg="#f8fafc", relief="solid", bd=1)
+        self.title_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=4)
+        self.title_entry.insert(0, f"會議錄音_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}")
+        info_card.columnconfigure(1, weight=1)
 
-        tk.Button(server_bar, text="變更網址", font=("Segoe UI", 8), bg="#ffffff", fg="#475569",
-                  relief="flat", padx=6, pady=1, cursor="hand2", command=self.open_server_url_dialog).pack(side="right")
+        # 3. 裝置選取與音量計卡片
+        dev_card = tk.LabelFrame(main_container, text=" 音訊硬體與即時動態監測 (未錄音時即可試音調整收音) ", font=("Segoe UI", 9, "bold"),
+                                 bg="#ffffff", fg="#334155", padx=14, pady=8, relief="groove")
+        dev_card.pack(fill="x", pady=(0, 8))
+        dev_card.columnconfigure(1, weight=1)
 
-        # 卡片 1: 音訊輸入與輸出裝置設定
-        card_dev = tk.Frame(main_container, bg="#ffffff", bd=1, relief="solid", padx=16, pady=12)
-        card_dev.pack(fill="x", pady=(0, 10))
-
-        tk.Label(card_dev, text="音訊裝置設定 (支援雙向無損混音)", font=("Segoe UI", 10, "bold"), bg="#ffffff").pack(anchor="w")
-
-        dev_grid = tk.Frame(card_dev, bg="#ffffff", pady=8)
-        dev_grid.pack(fill="x")
-
-        # 揚聲器 (系統音訊) - 設備選取行
-        tk.Label(dev_grid, text="🔊 揚聲器 (對方):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=0, column=0, sticky="w", pady=2)
-        self.spk_combo = ttk.Combobox(dev_grid, state="readonly", width=45)
+        # 揚聲器 (系統音訊)
+        tk.Label(dev_card, text="🔊 揚聲器 (對方):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=0, column=0, sticky="w", pady=2)
+        self.spk_combo = ttk.Combobox(dev_card, state="readonly", font=("Segoe UI", 9))
         self.spk_combo.grid(row=0, column=1, sticky="ew", padx=8, pady=2)
         self.spk_combo.bind("<<ComboboxSelected>>", self._on_device_changed)
 
-        refresh_btn = tk.Button(dev_grid, text="🔄 重新整理", font=("Segoe UI", 8),
-                                bg="#f1f5f9", fg="#475569", relief="flat", padx=6, pady=1, cursor="hand2", command=self._refresh_devices)
-        refresh_btn.grid(row=0, column=2, sticky="e", pady=2)
+        refresh_dev_btn = tk.Button(dev_card, text="🔄 重新整理", font=("Segoe UI", 8), bg="#f1f5f9", fg="#475569",
+                                    relief="flat", padx=6, pady=1, cursor="hand2", command=self._refresh_devices)
+        refresh_dev_btn.grid(row=0, column=2, sticky="e", pady=2)
 
         # 揚聲器增益與電平列
-        spk_ctrl_row = tk.Frame(dev_grid, bg="#ffffff")
+        spk_ctrl_row = tk.Frame(dev_card, bg="#ffffff")
         spk_ctrl_row.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(2, 6))
 
         tk.Label(spk_ctrl_row, text="收音增益：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
@@ -269,14 +231,14 @@ class RecorderApp:
         self.spk_meter_val_lbl = tk.Label(spk_ctrl_row, text="0%", font=("Consolas", 8), bg="#ffffff", fg="#64748b", width=5)
         self.spk_meter_val_lbl.pack(side="left")
 
-        # 麥克風 (自己聲音) - 設備選取行
-        tk.Label(dev_grid, text="🎤 麥克風 (自己):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=2, column=0, sticky="w", pady=2)
-        self.mic_combo = ttk.Combobox(dev_grid, state="readonly", width=45)
+        # 麥克風 (自己聲音)
+        tk.Label(dev_card, text="🎤 麥克風 (自己):", font=("Segoe UI", 9, "bold"), bg="#ffffff").grid(row=2, column=0, sticky="w", pady=2)
+        self.mic_combo = ttk.Combobox(dev_card, state="readonly", font=("Segoe UI", 9))
         self.mic_combo.grid(row=2, column=1, sticky="ew", padx=8, pady=2)
         self.mic_combo.bind("<<ComboboxSelected>>", self._on_device_changed)
 
         # 麥克風增益與電平列
-        mic_ctrl_row = tk.Frame(dev_grid, bg="#ffffff")
+        mic_ctrl_row = tk.Frame(dev_card, bg="#ffffff")
         mic_ctrl_row.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(2, 4))
 
         tk.Label(mic_ctrl_row, text="收音增益：", font=("Segoe UI", 8), bg="#ffffff", fg="#64748b").pack(side="left")
@@ -296,102 +258,72 @@ class RecorderApp:
         self.mic_meter_val_lbl = tk.Label(mic_ctrl_row, text="0%", font=("Consolas", 8), bg="#ffffff", fg="#64748b", width=5)
         self.mic_meter_val_lbl.pack(side="left")
 
-        dev_grid.columnconfigure(1, weight=1)
+        # 4. 錄音計時與控制卡片
+        ctrl_card = tk.Frame(main_container, bg="#ffffff", padx=16, pady=12, relief="groove", bd=1)
+        ctrl_card.pack(fill="x", pady=(0, 8))
 
-        # 卡片 2: 錄音控制核心卡片
-        card_rec = tk.Frame(main_container, bg="#ffffff", bd=1, relief="solid", padx=16, pady=16)
-        card_rec.pack(fill="x", pady=(0, 10))
+        self.timer_label = tk.Label(ctrl_card, text="00:00:00", font=("Consolas", 32, "bold"), fg="#1e293b", bg="#ffffff")
+        self.timer_label.pack(pady=(0, 6))
 
-        # 會議自訂標題輸入
-        title_box = tk.Frame(card_rec, bg="#ffffff")
-        title_box.pack(fill="x", pady=(0, 12))
-
-        tk.Label(title_box, text="會議標題 (可選):", font=("Segoe UI", 9, "bold"), bg="#ffffff").pack(side="left")
-        self.title_entry = tk.Entry(title_box, font=("Segoe UI", 10), relief="solid", bd=1)
-        self.title_entry.pack(side="left", fill="x", expand=True, padx=(8, 0))
-
-        # 計時器大字
-        self.timer_label = tk.Label(card_rec, text="00:00:00", font=("Consolas", 32, "bold"), fg="#64748b", bg="#ffffff")
-        self.timer_label.pack(pady=4)
-
-        # 錄音主按鈕
-        self.record_btn = tk.Button(card_rec, text="⏺  開始會議錄音", font=("Segoe UI", 12, "bold"),
+        self.record_btn = tk.Button(ctrl_card, text="🔴  開始錄製雙向會議", font=("Segoe UI", 12, "bold"),
                                     bg="#ef4444", fg="#ffffff", activebackground="#dc2626", activeforeground="#ffffff",
-                                    relief="flat", padx=24, pady=10, cursor="hand2", command=self.toggle_recording)
-        self.record_btn.pack(pady=8)
+                                    relief="flat", padx=30, pady=8, cursor="hand2", command=self.toggle_recording)
+        self.record_btn.pack(pady=4)
 
-        # 自動上傳勾選框
-        self.auto_upload_var = tk.BooleanVar(value=self.cfg.get("auto_upload", True))
-        chk = tk.Checkbutton(card_rec, text="錄音結束後自動上傳至伺服器並啟動雲端 AI 轉錄",
-                             variable=self.auto_upload_var, command=self.on_auto_upload_toggled,
-                             font=("Segoe UI", 9), bg="#ffffff", activebackground="#ffffff")
-        chk.pack(pady=4)
+        # 上傳到 AI 伺服器選項 (僅登入後可設定，預設選取；未登入時停用且不選取)
+        self.upload_to_server_var = tk.BooleanVar(value=False)
+        self.upload_check = tk.Checkbutton(
+            ctrl_card,
+            text=" 上傳到 AI 伺服器 (雲端生成逐字稿與會議摘要)",
+            variable=self.upload_to_server_var,
+            font=("Segoe UI", 9, "bold"),
+            bg="#ffffff",
+            activebackground="#ffffff",
+            selectcolor="#ffffff",
+            state="disabled",
+            command=self._on_upload_option_changed
+        )
+        self.upload_check.pack(pady=(6, 2))
 
-        # 卡片 3: 上傳狀態與雲端進度
-        card_status = tk.Frame(main_container, bg="#ffffff", bd=1, relief="solid", padx=16, pady=12)
-        card_status.pack(fill="both", expand=True)
+        self.upload_hint_label = tk.Label(
+            ctrl_card,
+            text="⚠️ 需先登入帳號方可勾選上傳至雲端伺服器 (未登入僅儲存本機音檔)",
+            font=("Segoe UI", 8),
+            fg="#94a3b8",
+            bg="#ffffff"
+        )
+        self.upload_hint_label.pack(pady=(0, 2))
 
-        tk.Label(card_status, text="即時狀態與上傳進度", font=("Segoe UI", 10, "bold"), bg="#ffffff").pack(anchor="w")
+        # 5. 狀態與雲端上傳卡片 (expand=True 確保底部區域完整展開)
+        status_card = tk.LabelFrame(main_container, text=" 雲端 AI 處理狀態與操作 ", font=("Segoe UI", 9, "bold"),
+                                    bg="#ffffff", fg="#334155", padx=14, pady=12, relief="groove")
+        status_card.pack(fill="both", expand=True)
 
-        self.status_msg_label = tk.Label(card_status, text="準備就緒，請點擊「開始會議錄音」",
-                                         font=("Segoe UI", 9), fg="#475569", bg="#ffffff", wraplength=700, justify="left")
-        self.status_msg_label.pack(anchor="w", pady=(6, 8))
+        self.status_msg_label = tk.Label(status_card, text="就緒。請確認登入帳號後開始錄音。", font=("Segoe UI", 9), fg="#475569", bg="#ffffff", anchor="w")
+        self.status_msg_label.pack(fill="x", pady=(0, 6))
 
-        self.progress_bar = ttk.Progressbar(card_status, mode="determinate", length=400)
-        self.progress_bar.pack(fill="x", pady=(0, 10))
+        self.progress_bar = ttk.Progressbar(status_card, mode="determinate")
+        self.progress_bar.pack(fill="x", pady=(0, 8))
 
-        btn_row = tk.Frame(card_status, bg="#ffffff")
-        btn_row.pack(fill="x")
+        btn_row = tk.Frame(status_card, bg="#ffffff")
+        btn_row.pack(fill="x", pady=4)
 
-        self.upload_manual_btn = tk.Button(btn_row, text="☁️ 手動上傳最後錄音檔", font=("Segoe UI", 9),
-                                           bg="#f1f5f9", fg="#1e293b", relief="flat", padx=12, pady=6,
-                                           state="disabled", command=self.manual_upload)
-        self.upload_manual_btn.pack(side="left", padx=(0, 8))
+        self.open_web_btn = tk.Button(btn_row, text="🌐 開啟網頁檢視會議總結與逐字稿", font=("Segoe UI", 9, "bold"),
+                                      bg="#f1f5f9", fg="#2563eb", activebackground="#e2e8f0", relief="groove",
+                                      padx=12, pady=5, cursor="hand2", state="disabled", command=self.open_web_platform)
+        self.open_web_btn.pack(side="left")
 
-        self.open_folder_btn = tk.Button(btn_row, text="📁 開啟本機錄音資料夾", font=("Segoe UI", 9),
-                                         bg="#f1f5f9", fg="#1e293b", relief="flat", padx=12, pady=6,
-                                         command=self.open_local_folder)
-        self.open_folder_btn.pack(side="left", padx=(0, 8))
+        self.retry_upload_btn = tk.Button(btn_row, text="🔄 重新上傳最後錄音", font=("Segoe UI", 9),
+                                          bg="#f1f5f9", fg="#475569", relief="groove",
+                                          padx=10, pady=5, cursor="hand2", state="disabled", command=self.manual_reupload)
+        self.retry_upload_btn.pack(side="right")
 
-        self.web_portal_btn = tk.Button(btn_row, text="🌐 開啟網頁會議儀表板", font=("Segoe UI", 9),
-                                        bg="#f1f5f9", fg="#2563eb", relief="flat", padx=12, pady=6,
-                                        command=self.open_web_portal)
-        self.web_portal_btn.pack(side="right")
+        self.open_folder_btn = tk.Button(btn_row, text="📁 開啟本機錄音夾", font=("Segoe UI", 9),
+                                         bg="#f1f5f9", fg="#475569", relief="groove",
+                                         padx=10, pady=5, cursor="hand2", command=self.open_local_folder)
+        self.open_folder_btn.pack(side="right", padx=(0, 8))
 
-    def open_server_url_dialog(self):
-        """設定伺服器連線網址"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("設定伺服器網址")
-        dlg.geometry("420x200")
-        dlg.resizable(False, False)
-        dlg.transient(self.root)
-        dlg.grab_set()
-        dlg.configure(bg="#ffffff", padx=20, pady=16)
-
-        tk.Label(dlg, text="伺服器連線網址 (PUBLIC_URL):", font=("Segoe UI", 10, "bold"), bg="#ffffff").pack(anchor="w")
-        entry = tk.Entry(dlg, font=("Segoe UI", 10), relief="solid", bd=1)
-        entry.pack(fill="x", pady=(6, 12))
-        entry.insert(0, self.cfg.get("server_url", DEFAULT_SERVER_URL))
-
-        def save_url():
-            u = entry.get().strip().rstrip("/")
-            if not u.startswith("http://") and not u.startswith("https://"):
-                messagebox.showerror("格式錯誤", "網址必須以 http:// 或 https:// 開頭！")
-                return
-            self.cfg["server_url"] = u
-            save_client_config(self.cfg)
-            self.server_url_display.config(text=u)
-            dlg.destroy()
-            self._check_login_status_bg()
-            messagebox.showinfo("成功", f"伺服器網址已更新為:\n{u}")
-
-        btn_row = tk.Frame(dlg, bg="#ffffff")
-        btn_row.pack(fill="x", pady=(8, 0))
-        tk.Button(btn_row, text="儲存網址", font=("Segoe UI", 9, "bold"), bg="#2563eb", fg="#ffffff",
-                  relief="flat", padx=14, pady=6, command=save_url).pack(side="left")
-        tk.Button(btn_row, text="取消", font=("Segoe UI", 9), bg="#f1f5f9", relief="flat", padx=12, pady=6,
-                  command=dlg.destroy).pack(side="right")
-
+    # ====== 裝置偵測 ======
     def _refresh_devices(self):
         try:
             self.spk_devices, self.mic_devices = self.engine.get_devices()
@@ -413,7 +345,7 @@ class RecorderApp:
                 self.mic_combo.set(MUTE_OPTION)
             self._on_device_changed()
         except Exception as e:
-            messagebox.showerror("裝置列舉失敗", f"無法列出音訊裝置: {e}")
+            self.status_msg_label.config(text=f"裝置讀取失敗: {e}", fg="#ef4444")
 
     def _on_device_changed(self, event=None):
         if self.is_recording:
@@ -534,6 +466,7 @@ class RecorderApp:
         self.engine.cleanup()
         self.root.destroy()
 
+    # ====== VU 音量監聽輪詢 ======
     def _schedule_meter_update(self):
         spk_gain = self.spk_gain_var.get()
         mic_gain = self.mic_gain_var.get()
@@ -543,48 +476,103 @@ class RecorderApp:
 
         self.spk_meter.set_level(spk_lvl, getattr(self, "spk_meter_val_lbl", None))
         self.mic_meter.set_level(mic_lvl, getattr(self, "mic_meter_val_lbl", None))
+
+        if self.is_recording:
+            elapsed = int(time.time() - self.record_start_time)
+            h = elapsed // 3600
+            m = (elapsed % 3600) // 60
+            s = elapsed % 60
+            self.timer_label.config(text=f"{h:02d}:{m:02d}:{s:02d}")
+
         self.root.after(40, self._schedule_meter_update)
 
+    # ====== 登入與伺服器認證 ======
     def _check_login_status_bg(self):
-        token = self.cfg.get("token")
-        server_url = self.cfg.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
+        # 若本機已保存上次登入的 Token 與帳號資訊，立即於 UI 恢復已登入狀態，避免開啟時變成未登入
+        if self.cfg.get("token") and self.cfg.get("user_name"):
+            self._update_user_ui_authed({
+                "name": self.cfg.get("user_name", "同仁"),
+                "email": self.cfg.get("user_email", "")
+            })
+        threading.Thread(target=self._verify_token_with_server, daemon=True).start()
 
+    def _verify_token_with_server(self):
+        token = self.cfg.get("token", "")
+        server_url = self.cfg.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
         if not token:
-            self._update_user_ui_unauth()
+            self.root.after(0, self._update_user_ui_unauth)
             return
 
-        def worker():
-            api_url = f"{server_url}/api/auth/me"
-            try:
-                req = urllib.request.Request(api_url, headers={"Authorization": f"Bearer {token}"})
-                with urllib.request.urlopen(req, timeout=5) as res:
-                    data = json.loads(res.read().decode("utf-8"))
-                    if data.get("status") == "ok":
-                        self.root.after(0, lambda: self._update_user_ui_authed(data["user"]))
-                        return
-            except Exception:
-                pass
-            self.root.after(0, self._update_user_ui_unauth)
-
-        threading.Thread(target=worker, daemon=True).start()
+        api_url = f"{server_url}/api/auth/me"
+        try:
+            req = urllib.request.Request(api_url, headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=5) as res:
+                data = json.loads(res.read().decode("utf-8"))
+                if data.get("status") == "ok":
+                    user = data.get("user", {})
+                    self.cfg["user_name"] = user.get("name", "")
+                    self.cfg["user_email"] = user.get("email", "")
+                    save_client_config(self.cfg)
+                    self.root.after(0, lambda: self._update_user_ui_authed(user))
+                    return
+        except urllib.error.HTTPError as he:
+            # 僅當伺服器明確回傳 401 或 403 時，才視為登入失效需清除
+            if he.code in (401, 403):
+                self.cfg["token"] = ""
+                save_client_config(self.cfg)
+                self.root.after(0, self._update_user_ui_unauth)
+                return
+        except Exception as e:
+            # 暫時性網路斷線或逾時，保留本機已登入狀態
+            print("Token verify network error, keeping session:", e)
+            return
 
     def _update_user_ui_authed(self, user):
-        name = user.get("name", "同仁")
+        name = user.get("name", "")
         email = user.get("email", "")
         self.user_status_label.config(text=f"👤 {name} ({email})", fg="#38bdf8")
-        self.auth_btn.config(text="登出", bg="#334155", activebackground="#475569")
+        self.auth_btn.config(text="登出 / 切換", bg="#334155")
+        self.open_web_btn.config(state="normal")
+
+        # 登入成功：啟用勾選選項，預設勾選 (或維持先前偏好)
+        self.upload_check.config(state="normal")
+        is_auto = self.cfg.get("auto_upload", True)
+        self.upload_to_server_var.set(is_auto)
+        self.upload_hint_label.config(
+            text="✓ 已登入，可自由切換是否上傳至 AI 伺服器 (本機均會完整存檔)",
+            fg="#10b981"
+        )
 
     def _update_user_ui_unauth(self):
-        self.user_status_label.config(text="⚠️ 尚未登入", fg="#f59e0b")
-        self.auth_btn.config(text="Google 登入", bg="#2563eb", activebackground="#1d4ed8")
+        self.user_status_label.config(text="⚠️ 尚未登入", fg="#fca5a5")
+        self.auth_btn.config(text="登入帳號", bg="#2563eb")
+        self.open_web_btn.config(state="disabled")
 
-    def on_auto_upload_toggled(self):
-        self.cfg["auto_upload"] = self.auto_upload_var.get()
+        # 未登入：停用勾選選項，強制不選取且無法修改
+        self.upload_to_server_var.set(False)
+        self.upload_check.config(state="disabled")
+        self.upload_hint_label.config(
+            text="⚠️ 需先登入帳號方可勾選上傳至雲端伺服器 (未登入僅儲存本機音檔)",
+            fg="#94a3b8"
+        )
+
+    def _on_upload_option_changed(self):
+        val = self.upload_to_server_var.get()
+        self.cfg["auto_upload"] = val
         save_client_config(self.cfg)
+        if self.is_recording:
+            if val and self.cfg.get("token"):
+                self.record_btn.config(text="⏹  停止錄音並上傳雲端")
+            else:
+                self.record_btn.config(text="⏹  停止錄音並儲存本機")
 
-    def open_web_portal(self):
-        url = self.cfg.get("server_url", DEFAULT_SERVER_URL)
-        webbrowser.open(url)
+    def open_local_folder(self):
+        if not os.path.exists(RECORDINGS_DIR):
+            os.makedirs(RECORDINGS_DIR, exist_ok=True)
+        try:
+            os.startfile(RECORDINGS_DIR)
+        except Exception as e:
+            messagebox.showerror("開啟失敗", f"無法開啟本機資料夾: {e}")
 
     def on_auth_btn_clicked(self):
         if self.cfg.get("token"):
@@ -599,102 +587,95 @@ class RecorderApp:
 
     def open_login_dialog(self):
         dlg = tk.Toplevel(self.root)
-        dlg.title("登入會議系統")
-        dlg.geometry("450x360")
-        dlg.minsize(420, 340)
+        dlg.title("登入 Hawkeye 會議系統")
+        dlg.geometry("420x330")
+        dlg.minsize(400, 310)
         dlg.resizable(False, False)
         dlg.transient(self.root)
         dlg.grab_set()
+
         dlg.configure(bg="#ffffff", padx=24, pady=20)
 
-        tk.Label(dlg, text="同仁帳號登入", font=("Segoe UI", 13, "bold"), bg="#ffffff").pack(anchor="w", pady=(0, 6))
-        tk.Label(dlg, text="點擊下方按鈕以 Google (Gmail) 帳號快速登入：",
-                 font=("Segoe UI", 9), fg="#64748b", bg="#ffffff").pack(anchor="w", pady=(0, 14))
+        tk.Label(dlg, text="同仁帳號登入", font=("Segoe UI", 13, "bold"), bg="#ffffff").pack(anchor="w", pady=(0, 14))
 
-        status_label = tk.Label(dlg, text="", font=("Segoe UI", 9), fg="#2563eb", bg="#ffffff", wraplength=400)
-        status_label.pack(anchor="w", pady=(0, 10))
+        tk.Label(dlg, text="企業信箱 (限 @hawkeyetech.com.tw):", font=("Segoe UI", 9, "bold"), bg="#ffffff").pack(anchor="w")
+        email_entry = tk.Entry(dlg, font=("Segoe UI", 10), relief="solid", bd=1)
+        email_entry.pack(fill="x", pady=(3, 12))
+        email_entry.insert(0, self.cfg.get("user_email", ""))
 
-        # Google 登入按鈕
-        def start_google_login():
+        tk.Label(dlg, text="密碼:", font=("Segoe UI", 9, "bold"), bg="#ffffff").pack(anchor="w")
+        pwd_entry = tk.Entry(dlg, font=("Segoe UI", 10), relief="solid", bd=1, show="•")
+        pwd_entry.pack(fill="x", pady=(3, 12))
+
+        err_label = tk.Label(dlg, text="", font=("Segoe UI", 9), fg="#ef4444", bg="#ffffff")
+        err_label.pack(anchor="w", pady=(0, 10))
+
+        def do_login():
             server_url = self.cfg.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
-            status_label.config(text="正在建立登入連線，請稍候...", fg="#2563eb")
+            email = email_entry.get().strip()
+            password = pwd_entry.get()
+
+            if not email or not password:
+                err_label.config(text="請輸入完整信箱與密碼！")
+                return
+
+            err_label.config(text="連線驗證中...", fg="#2563eb")
             dlg.update()
 
-            def ticket_worker():
+            def login_worker():
+                api_url = f"{server_url}/api/auth/login"
                 try:
-                    create_url = f"{server_url}/api/auth/client_ticket/create"
-                    req = urllib.request.Request(create_url, data=b"{}", headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(req, timeout=8) as res:
+                    payload = json.dumps({"email": email, "password": password}).encode("utf-8")
+                    req = urllib.request.Request(api_url, data=payload, headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=10) as res:
                         data = json.loads(res.read().decode("utf-8"))
+                        if data.get("status") == "ok":
+                            self.cfg["server_url"] = server_url
+                            self.cfg["token"] = data["token"]
+                            self.cfg["user_name"] = data["user"].get("name", "")
+                            self.cfg["user_email"] = data["user"].get("email", "")
+                            save_client_config(self.cfg)
 
-                    ticket = data.get("ticket")
-                    login_url = data.get("login_url")
-                    if not ticket or not login_url:
-                        raise ValueError("伺服器回傳票據格式錯誤")
-
-                    # 開啟瀏覽器進行 Google 授權
-                    webbrowser.open(login_url)
-                    dlg.after(0, lambda: status_label.config(
-                        text="已在瀏覽器開啟 Google 授權頁！\n請於瀏覽器登入完成後返回本程式...", fg="#10b981"))
-
-                    # 背景輪詢票據
-                    poll_url = f"{server_url}/api/auth/client_ticket/poll?ticket={urllib.parse.quote(ticket)}"
-                    for _ in range(120): # 最多等待 2 分鐘
-                        time.sleep(1.5)
-                        try:
-                            p_req = urllib.request.Request(poll_url)
-                            with urllib.request.urlopen(p_req, timeout=5) as p_res:
-                                p_data = json.loads(p_res.read().decode("utf-8"))
-                                if p_data.get("status") == "success":
-                                    token = p_data["token"]
-                                    user = p_data["user"]
-                                    self.cfg["token"] = token
-                                    self.cfg["user_name"] = user.get("name", "")
-                                    self.cfg["user_email"] = user.get("email", "")
-                                    save_client_config(self.cfg)
-
-                                    dlg.after(0, lambda: [
-                                        self._update_user_ui_authed(user),
-                                        dlg.destroy(),
-                                        messagebox.showinfo("登入成功", f"歡迎回來，{user.get('name')}！")
-                                    ])
-                                    return
-                                elif p_data.get("status") == "expired":
-                                    dlg.after(0, lambda: status_label.config(text="登入連線逾時，請重新點擊登入。", fg="#ef4444"))
-                                    return
-                        except Exception:
-                            pass
+                            dlg.after(0, lambda: [
+                                self._update_user_ui_authed(data["user"]),
+                                dlg.destroy(),
+                                messagebox.showinfo("登入成功", f"歡迎回來，{data['user'].get('name')}！")
+                            ])
+                            return
+                        else:
+                            msg = data.get("message", "登入失敗")
+                            dlg.after(0, lambda: err_label.config(text=msg, fg="#ef4444"))
+                except urllib.error.HTTPError as he:
+                    try:
+                        err_data = json.loads(he.read().decode("utf-8"))
+                        msg = err_data.get("message", str(he))
+                    except Exception:
+                        msg = str(he)
+                    dlg.after(0, lambda: err_label.config(text=f"錯誤: {msg}", fg="#ef4444"))
                 except Exception as ex:
-                    dlg.after(0, lambda: status_label.config(text=f"無法連接伺服器: {ex}", fg="#ef4444"))
+                    dlg.after(0, lambda: err_label.config(text=f"連線失敗: {ex}", fg="#ef4444"))
 
-            threading.Thread(target=ticket_worker, daemon=True).start()
+            threading.Thread(target=login_worker, daemon=True).start()
 
-        google_btn = tk.Button(dlg, text="🌐 使用 Google 帳號一鍵登入", font=("Segoe UI", 10, "bold"),
-                               bg="#ffffff", fg="#1e293b", activebackground="#f8fafc", relief="solid", bd=1,
-                               padx=16, pady=10, cursor="hand2", command=start_google_login)
-        google_btn.pack(fill="x", pady=(0, 16))
+        # 按鍵綁定 Enter 鍵快速登入
+        email_entry.bind("<Return>", lambda e: pwd_entry.focus_set())
+        pwd_entry.bind("<Return>", lambda e: do_login())
 
-        # 手動輸入 Token 或伺服器應急
-        sep_frame = tk.Frame(dlg, bg="#ffffff")
-        sep_frame.pack(fill="x", pady=(0, 10))
-        tk.Label(sep_frame, text="──── 或手動貼上網頁登入 Token ────", font=("Segoe UI", 8), fg="#94a3b8", bg="#ffffff").pack()
+        btn_row = tk.Frame(dlg, bg="#ffffff")
+        btn_row.pack(fill="x", pady=(4, 0))
 
-        token_entry = tk.Entry(dlg, font=("Segoe UI", 9), relief="solid", bd=1)
-        token_entry.pack(fill="x", pady=(0, 10))
+        login_btn = tk.Button(btn_row, text="登入帳號", font=("Segoe UI", 9, "bold"), bg="#2563eb", fg="#ffffff",
+                              activebackground="#1d4ed8", relief="flat", padx=16, pady=8, cursor="hand2", command=do_login)
+        login_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        def save_token_manual():
-            tk_val = token_entry.get().strip()
-            if not tk_val:
-                messagebox.showwarning("提示", "請輸入 Token！")
-                return
-            self.cfg["token"] = tk_val
-            save_client_config(self.cfg)
-            self._check_login_status_bg()
-            dlg.destroy()
-            messagebox.showinfo("已套用", "憑證已儲存！")
+        tk.Button(btn_row, text="前往網頁註冊", font=("Segoe UI", 9), bg="#f1f5f9", fg="#475569",
+                  relief="groove", padx=12, pady=8, cursor="hand2",
+                  command=lambda: webbrowser.open(self.cfg.get("server_url", DEFAULT_SERVER_URL))).pack(side="right")
 
-        tk.Button(dlg, text="套用 Token", font=("Segoe UI", 8), bg="#f1f5f9", relief="flat",
-                  padx=10, pady=4, command=save_token_manual).pack(anchor="e")
+        if not email_entry.get():
+            email_entry.focus_set()
+        else:
+            pwd_entry.focus_set()
 
     # ====== 錄音控制 ======
     def toggle_recording(self):
@@ -726,58 +707,58 @@ class RecorderApp:
         self.status_msg_label.config(text="正在啟動音訊錄製引擎...", fg="#2563eb")
 
         def start_worker():
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    ctypes.windll.ole32.CoInitialize(None)
+                except Exception:
+                    pass
             success, msg = self.engine.start_recording(spk_dev, mic_dev)
             if success:
                 self.is_recording = True
                 self.record_start_time = time.time()
-                self.root.after(0, self._on_recording_started)
+                self.root.after(0, self._on_record_started)
             else:
                 self.root.after(0, lambda m=msg: [
                     self.record_btn.config(state="normal"),
-                    messagebox.showerror("啟動失敗", f"無法啟動音訊錄製裝置: {m}"),
-                    self.status_msg_label.config(text="錄音啟動失敗", fg="#ef4444")
+                    messagebox.showerror("啟動失敗", f"無法啟動音訊錄製裝置: {m}")
                 ])
 
         threading.Thread(target=start_worker, daemon=True).start()
 
-    def _on_recording_started(self):
-        self.record_btn.config(text="⏹  停止會議錄音", bg="#334155", state="normal")
-        self.timer_label.config(fg="#ef4444")
-        self.status_msg_label.config(text="錄音進行中... 結束時將自動匯出 MP3 並上傳", fg="#10b981")
-        self.spk_combo.config(state="disabled")
-        self.mic_combo.config(state="disabled")
-        self.upload_manual_btn.config(state="disabled")
-        self._update_timer()
-
-    def _update_timer(self):
-        if self.is_recording:
-            elapsed = int(time.time() - self.record_start_time)
-            h = elapsed // 3600
-            m = (elapsed % 3600) // 60
-            s = elapsed % 60
-            self.timer_label.config(text=f"{h:02d}:{m:02d}:{s:02d}")
-            self.root.after(500, self._update_timer)
+    def _on_record_started(self):
+        if self.upload_to_server_var.get() and self.cfg.get("token"):
+            self.record_btn.config(text="⏹  停止錄音並上傳雲端", bg="#0f172a", state="normal")
+        else:
+            self.record_btn.config(text="⏹  停止錄音並儲存本機", bg="#0f172a", state="normal")
+        self.status_msg_label.config(text="⏺ 錄音進行中 (正在混音錄製)...", fg="#ef4444")
+        self.progress_bar["value"] = 0
 
     def stop_recording(self):
         self.record_btn.config(state="disabled")
-        self.status_msg_label.config(text="正在停止錄音並匯出 MP3 音訊檔...", fg="#2563eb")
+        self.status_msg_label.config(text="正在停止錄音並匯出 MP3...", fg="#2563eb")
         self.is_recording = False
 
+        # 輸出檔案路徑
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        user_title = self.title_entry.get().strip()
-        if user_title:
-            clean_title = re.sub(r'[^a-zA-Z0-9_\u4e00-\u9fa5]', '_', user_title)[:30]
-            filename = f"會議錄音_{now_str}_{clean_title}.mp3"
-        else:
-            filename = f"會議錄音_{now_str}.mp3"
-
-        out_path = os.path.join(RECORDINGS_DIR, filename)
+        title_raw = self.title_entry.get().strip() or f"會議錄音_{now_str}"
+        safe_title = "".join(c for c in title_raw if c.isalnum() or c in (' ', '_', '-')).strip()[:35]
+        mp3_filename = f"{safe_title}_{now_str}.mp3"
+        mp3_path = os.path.join(RECORDINGS_DIR, mp3_filename)
 
         def stop_worker():
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    ctypes.windll.ole32.CoInitialize(None)
+                except Exception:
+                    pass
             try:
+                # 1. 停止音訊串流執行緒
                 self.engine.stop_recording()
+                # 2. 混音並編碼為 MP3 (低記憶體串流分塊混音)
                 self.engine.mix_and_export_mp3(
-                    out_path,
+                    mp3_path,
                     spk_gain=self.spk_gain_var.get(),
                     mic_gain=self.mic_gain_var.get(),
                     progress_cb=lambda p, msg: self.root.after(0, lambda pct=int(p * 100), m=msg: [
@@ -785,146 +766,112 @@ class RecorderApp:
                         self.status_msg_label.config(text=f"匯出 MP3 ({pct}%): {m}", fg="#2563eb")
                     ])
                 )
-                self.last_audio_file = out_path
+                self.last_audio_file = mp3_path
             except Exception as e:
                 print(f"Error mixing and exporting MP3: {e}")
                 self.last_audio_file = None
                 self.root.after(0, lambda err=e: self.status_msg_label.config(text=f"匯出失敗: {err}", fg="#ef4444"))
             finally:
-                self.root.after(0, self._on_recording_stopped)
+                self.root.after(0, self._on_record_stopped)
                 self.root.after(500, self._on_device_changed)
 
         threading.Thread(target=stop_worker, daemon=True).start()
 
-    def _on_recording_stopped(self):
-        self.record_btn.config(text="⏺  開始會議錄音", bg="#ef4444", state="normal")
-        self.timer_label.config(fg="#64748b")
-        self.spk_combo.config(state="readonly")
-        self.mic_combo.config(state="readonly")
-        self.upload_manual_btn.config(state="normal")
+    def _on_record_stopped(self):
+        self.record_btn.config(text="🔴  開始錄製雙向會議", bg="#ef4444", state="normal")
+        self.retry_upload_btn.config(state="normal")
 
-        if self.last_audio_file and os.path.exists(self.last_audio_file):
-            size_mb = os.path.getsize(self.last_audio_file) / (1024 * 1024)
-            self.status_msg_label.config(text=f"錄音已儲存本機 ({size_mb:.2f} MB):\n{self.last_audio_file}", fg="#1e293b")
-
-            if self.auto_upload_var.get():
-                self.do_upload(self.last_audio_file)
-        else:
-            self.status_msg_label.config(text="錄音完成，但未偵測到音訊檔", fg="#f59e0b")
-
-    def manual_upload(self):
         if not self.last_audio_file or not os.path.exists(self.last_audio_file):
-            messagebox.showinfo("提示", "目前無最近錄音檔案可供上傳！")
+            self.status_msg_label.config(text="錄音檔輸出失敗或錄音時長過短", fg="#ef4444")
             return
-        self.do_upload(self.last_audio_file)
 
-    def do_upload(self, file_path):
+        file_sz_mb = os.path.getsize(self.last_audio_file) / 1024 / 1024
+
+        # 不論有無上傳，錄音檔均已完整儲存於本機 local
+        if self.upload_to_server_var.get() and self.cfg.get("token"):
+            self.status_msg_label.config(text=f"本機「會議錄音」已存檔 ({file_sz_mb:.1f} MB)，正在自動上傳至雲端 AI 伺服器...", fg="#10b981")
+            # 自動上傳
+            self.upload_audio_to_server(self.last_audio_file)
+        else:
+            self.status_msg_label.config(text=f"錄音完成！音檔已儲存至本機「會議錄音」資料夾 ({file_sz_mb:.1f} MB)，未上傳至雲端伺服器。", fg="#10b981")
+
+    # ====== 雲端上傳與轉錄輪詢 ======
+    def manual_reupload(self):
+        if self.last_audio_file and os.path.exists(self.last_audio_file):
+            self.upload_audio_to_server(self.last_audio_file)
+        else:
+            messagebox.showinfo("無檔案", "目前沒有可重試的錄音檔案。")
+
+    def upload_audio_to_server(self, file_path):
         token = self.cfg.get("token")
         if not token:
-            res = messagebox.askyesno("尚未登入", "尚未登入帳號，無法將音訊上傳至雲端會議庫。\n是否立即登入？")
+            res = messagebox.askyesno("尚未登入", "上傳音訊至雲端 AI 需先登入帳號。\n是否現在立即登入？")
             if res:
                 self.open_login_dialog()
             return
 
         server_url = self.cfg.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
-        user_title = self.title_entry.get().strip()
+        title = self.title_entry.get().strip()
+        filename = os.path.basename(file_path)
 
-        self.upload_manual_btn.config(state="disabled")
-        self.record_btn.config(state="disabled")
-        self.status_msg_label.config(text="正在將音訊上傳至伺服器...", fg="#2563eb")
-        self.progress_bar["value"] = 10
+        self.status_msg_label.config(text="正在連線伺服器並上傳音訊...", fg="#2563eb")
+        self.progress_bar["value"] = 20
 
         def upload_worker():
+            upload_url = f"{server_url}/api/upload?filename={urllib.parse.quote(filename)}&title={urllib.parse.quote(title)}"
             try:
-                filename = os.path.basename(file_path)
-                file_size = os.path.getsize(file_path)
+                with open(file_path, "rb") as f_in:
+                    data_bytes = f_in.read()
 
-                api_url = f"{server_url}/api/upload"
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/octet-stream",
-                    "Content-Length": str(file_size),
-                    "X-Filename": urllib.parse.quote(filename),
-                    "X-Meeting-Title": urllib.parse.quote(user_title)
-                }
-
-                with open(file_path, "rb") as f:
-                    req = urllib.request.Request(api_url, data=f, headers=headers, method="POST")
-                    with urllib.request.urlopen(req, timeout=120) as resp:
-                        res_data = json.loads(resp.read().decode("utf-8"))
-
-                if res_data.get("status") == "ok":
-                    task_id = res_data.get("taskId")
-                    self.last_task_id = task_id
+                req = urllib.request.Request(
+                    upload_url,
+                    data=data_bytes,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "audio/mpeg",
+                        "X-Filename": urllib.parse.quote(filename),
+                        "X-Meeting-Title": urllib.parse.quote(title)
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=120) as res:
+                    resp = json.loads(res.read().decode("utf-8"))
+                    if resp.get("status") == "ok":
+                        task_id = resp.get("taskId")
+                        self.last_task_id = task_id
+                        self.root.after(0, lambda: [
+                            self.progress_bar.config(value=100),
+                            self.status_msg_label.config(
+                                text="🎉 音檔已成功上傳！雲端 AI 正在背景處理中，預計 1~3 分鐘後完成，請至網頁檢視。",
+                                fg="#10b981"
+                            ),
+                            self.open_web_btn.config(state="normal"),
+                            messagebox.showinfo(
+                                "音檔上傳成功",
+                                "會議音檔已成功上傳至 AI 伺服器！\n\n雲端正在背景進行語音辨識與摘要生成，\n您不需要在電腦前等待，預計 1~3 分鐘後即可於網頁中瀏覽會議記錄。"
+                            )
+                        ])
+                    else:
+                        err = resp.get("message", "上傳失敗")
+                        self.root.after(0, lambda: [
+                            self.status_msg_label.config(text=f"伺服器回應錯誤: {err}", fg="#ef4444"),
+                            messagebox.showerror("上傳錯誤", err)
+                        ])
+            except urllib.error.HTTPError as he:
+                if he.code == 401:
                     self.root.after(0, lambda: [
-                        self.status_msg_label.config(text="音訊上傳完成！雲端 AI 正在轉譯逐字稿與會議重點整理...", fg="#10b981"),
-                        self.progress_bar.configure(value=40),
-                        self.record_btn.config(state="normal"),
-                        self.upload_manual_btn.config(state="normal")
+                        self.status_msg_label.config(text="登入憑證過期，請重新登入", fg="#ef4444"),
+                        self.open_login_dialog()
                     ])
-                    # 開始輪詢轉錄狀態
-                    self._poll_task_status(task_id)
                 else:
-                    msg = res_data.get("message", "上傳失敗")
-                    self.root.after(0, lambda: [
-                        self.status_msg_label.config(text=f"上傳失敗: {msg}", fg="#ef4444"),
-                        self.record_btn.config(state="normal"),
-                        self.upload_manual_btn.config(state="normal"),
-                        self.progress_bar.configure(value=0)
-                    ])
-            except Exception as e:
-                self.root.after(0, lambda: [
-                    self.status_msg_label.config(text=f"連線上傳失敗: {e}", fg="#ef4444"),
-                    self.record_btn.config(state="normal"),
-                    self.upload_manual_btn.config(state="normal"),
-                    self.progress_bar.configure(value=0)
-                ])
+                    self.root.after(0, lambda: self.status_msg_label.config(text=f"HTTP 錯誤: {he.code}", fg="#ef4444"))
+            except Exception as ex:
+                self.root.after(0, lambda: self.status_msg_label.config(text=f"上傳失敗: {ex}", fg="#ef4444"))
 
         threading.Thread(target=upload_worker, daemon=True).start()
 
-    def _poll_task_status(self, task_id):
+    def open_web_platform(self):
         server_url = self.cfg.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
-        status_url = f"{server_url}/api/task_status?taskId={task_id}"
-
-        def poll_worker():
-            for _ in range(60): # 輪詢 5 分鐘
-                time.sleep(5)
-                try:
-                    req = urllib.request.Request(status_url)
-                    with urllib.request.urlopen(req, timeout=5) as res:
-                        data = json.loads(res.read().decode("utf-8"))
-                        st = data.get("status")
-                        prog = data.get("progress", 50)
-                        msg = data.get("message", "")
-
-                        if st == "done":
-                            self.root.after(0, lambda: [
-                                self.progress_bar.configure(value=100),
-                                self.status_msg_label.config(text="🎉 雲端 AI 轉錄與重點摘要已完成！點擊右方可開啟網頁查看。", fg="#10b981")
-                            ])
-                            return
-                        elif st == "error":
-                            err_msg = data.get("error", "轉錄錯誤")
-                            self.root.after(0, lambda: [
-                                self.status_msg_label.config(text=f"轉錄失敗: {err_msg}", fg="#ef4444"),
-                                self.progress_bar.configure(value=0)
-                            ])
-                            return
-                        else:
-                            self.root.after(0, lambda p=prog, m=msg: [
-                                self.progress_bar.configure(value=p),
-                                self.status_msg_label.config(text=f"AI 雲端處理中 ({p}%): {m}", fg="#2563eb")
-                            ])
-                except Exception:
-                    pass
-
-        threading.Thread(target=poll_worker, daemon=True).start()
-
-    def open_local_folder(self):
-        try:
-            os.startfile(RECORDINGS_DIR)
-        except Exception as e:
-            messagebox.showerror("開啟失敗", f"無法開啟本機資料夾: {e}")
+        webbrowser.open(server_url)
 
 def main():
     root = tk.Tk()

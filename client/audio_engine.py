@@ -15,8 +15,18 @@ import numpy as np
 import pyaudiowpatch as pyaudio
 import lameenc
 
+def _ensure_com():
+    """在 Windows 上確保當前執行緒已正確初始化 COM (WASAPI 運作必備)"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.ole32.CoInitialize(None)
+        except Exception:
+            pass
+
 class AudioEngine:
     def __init__(self):
+        _ensure_com()
         self.p = None
         self.is_recording = False
         self.is_previewing = False
@@ -49,6 +59,7 @@ class AudioEngine:
 
     def _init_pyaudio(self):
         """確保 PyAudio 實例建立，若已存在則重複使用，避免 terminate 導致底層 C 庫崩潰"""
+        _ensure_com()
         if self.p is None:
             try:
                 self.p = pyaudio.PyAudio()
@@ -77,6 +88,7 @@ class AudioEngine:
         - speakers: WASAPI Loopback 裝置列表 (錄製喇叭/揚聲器聲音)
         - microphones: WASAPI 麥克風輸入裝置列表
         """
+        _ensure_com()
         self._init_pyaudio()
         speakers = []
         microphones = []
@@ -141,6 +153,7 @@ class AudioEngine:
 
     def start_preview_monitoring(self, spk_device, mic_device):
         """啟動未錄音時的即時試音監聽（採用非阻塞回調，杜絕無聲音時卡住）"""
+        _ensure_com()
         if self.is_recording:
             return
         self.stop_preview_monitoring()
@@ -189,10 +202,13 @@ class AudioEngine:
 
     def stop_preview_monitoring(self):
         """立即停止即時試音監聽（瞬間關閉無阻塞）"""
+        _ensure_com()
         self.is_previewing = False
+        had_stream = False
         for attr in ["preview_mic_stream", "preview_spk_stream"]:
             s = getattr(self, attr, None)
             if s:
+                had_stream = True
                 try:
                     s.stop_stream()
                     s.close()
@@ -201,9 +217,12 @@ class AudioEngine:
                 setattr(self, attr, None)
         self.spk_level = 0.0
         self.mic_level = 0.0
+        if had_stream:
+            time.sleep(0.04)
 
     def _start_recording_stream(self, dev_info, wav_path, level_attr):
         """採用回調 + 佇列 + 獨立背景寫入執行緒，保證零掉幀且不阻塞任何事件"""
+        _ensure_com()
         channels = max(1, dev_info["channels"])
         rate = dev_info["rate"]
         q = queue.Queue(maxsize=1000)
@@ -258,6 +277,7 @@ class AudioEngine:
     def _stop_recording_stream(self, rec_obj, level_attr):
         if not rec_obj:
             return
+        _ensure_com()
         setattr(self, level_attr, 0.0)
         stream = rec_obj.get("stream")
         if stream:
@@ -273,13 +293,14 @@ class AudioEngine:
 
     def start_recording(self, spk_device, mic_device):
         """開始錄音"""
+        _ensure_com()
         if self.is_recording:
             return False, "已經在錄音中"
 
         if not spk_device and not mic_device:
             return False, "必須至少選擇一個設備（喇叭或麥克風）進行錄音"
 
-        # 1. 停止預覽監聽，安全不重設 PyAudio
+        # 1. 停止預覽監聽
         self.stop_preview_monitoring()
         self._init_pyaudio()
         if not self.p:
@@ -314,6 +335,7 @@ class AudioEngine:
 
     def stop_recording(self):
         """停止錄音"""
+        _ensure_com()
         if not self.is_recording:
             return
         self.is_recording = False
@@ -497,6 +519,7 @@ class AudioEngine:
 
     def cleanup(self):
         """釋放所有資源"""
+        _ensure_com()
         self.stop_recording()
         self.stop_preview_monitoring()
         if self.p:
